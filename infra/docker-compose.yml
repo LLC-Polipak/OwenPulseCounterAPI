@@ -7,7 +7,7 @@ services:
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
     volumes:
-      - ./settings.py:/
+      - ./settings.py:/code/app/settings.py
 
   nginx:
     image: nginx:1.25.1

@@ -281,11 +281,13 @@ class OwenCI8:
         """
         if parameter_hash not in (self.DCNT, self.DSPD, self.DTMR):
             raise ValueError(self.__HASH_ERR_MSG.format(actual=parameter_hash))
+        serial_if.reset_input_buffer()
         serial_if.write(
             self.bin_to_ascii(
                 self.get_command_packet(parameter_hash)
             )
         )
+        serial_if.flush()
         response_expected_len = self.PARAMS[parameter_hash]['response_len']
         ascii_response = serial_if.read(response_expected_len)
 

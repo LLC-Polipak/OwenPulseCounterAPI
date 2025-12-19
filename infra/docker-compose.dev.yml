@@ -6,8 +6,8 @@ services:
       context: ../app
       dockerfile: Dockerfile
     restart: unless-stopped
-#    devices:
-#      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
     volumes:
       - ./settings.py:/code/app/settings.py
 
