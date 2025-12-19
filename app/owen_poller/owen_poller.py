@@ -33,6 +33,8 @@ class Sensor:
             self.reading.value = self.device.read_parameter(
                 self.serial, self.parameter_hash)
             self.reading.time = datetime.now()
+        except TimeoutError:
+            logger.error(f'Сенсор {self.name} не ответил')
         except Exception as err:
             logger.error(f'Сенсор {self.name} {err}')
 
