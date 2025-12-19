@@ -1,5 +1,5 @@
 import logging
-import os
+from pathlib import Path
 
 from pydantic import BaseSettings, HttpUrl
 
@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     class Config:
         # env_file = '.env'
-        env_file = f'{os.path.dirname(os.path.abspath(__file__))}/.env'
+        env_file = f'{Path(__file__).resolve().parent.parent}/.env'
         env_file_encoding = 'utf-8'
 
 
