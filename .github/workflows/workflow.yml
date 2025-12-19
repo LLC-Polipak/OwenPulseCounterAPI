@@ -23,21 +23,21 @@ jobs:
         with:
           context: app
           push: true
-          tags: aleksup/owen_counter_api:latest
+          tags: polipak/owen_counter_api:latest
 
-  send_message:
-    if: ${{ always() }}
-    needs: [ build_and_push_backend_to_docker_hub ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send message
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            ${{ github.workflow }}
-            Actor: ${{ github.actor }}
-            Branch: ${{ github.ref_name }}
-            Results:
-              building and pushing back: ${{ needs.build_and_push_backend_to_docker_hub.result }}
+#  send_message:
+#    if: ${{ always() }}
+#    needs: [ build_and_push_backend_to_docker_hub ]
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Send message
+#        uses: appleboy/telegram-action@master
+#        with:
+#          to: ${{ secrets.TELEGRAM_TO }}
+#          token: ${{ secrets.TELEGRAM_TOKEN }}
+#          message: |
+#            ${{ github.workflow }}
+#            Actor: ${{ github.actor }}
+#            Branch: ${{ github.ref_name }}
+#            Results:
+#              building and pushing back: ${{ needs.build_and_push_backend_to_docker_hub.result }}
