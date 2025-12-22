@@ -1,15 +1,19 @@
 import logging
 from datetime import timedelta
-from typing import Any, Union
+from typing import Any
 
 from serial import Serial
 
 from app.api.config import configure_logging
-from app.owen_counter.exeptions import (BCDValueError,
-                                        ImproperlyConfiguredError,
-                                        PacketDecodeError, PacketFooterError,
-                                        PacketHeaderError, PacketLenError,
-                                        TimeValueError)
+from app.owen_counter.exeptions import (
+    BCDValueError,
+    ImproperlyConfiguredError,
+    PacketDecodeError,
+    PacketFooterError,
+    PacketHeaderError,
+    PacketLenError,
+    TimeValueError,
+)
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -23,7 +27,7 @@ class DataConverters:
     __CLK_HUNDREDTHS_SECOND_BYTES = slice(5, 6)
 
     @staticmethod
-    def bcd_to_int(data: Union[bytes, bytearray]) -> int:
+    def bcd_to_int(data: bytes | bytearray) -> int:
         """
         Конвертирует DEC_dot0 (BCD) в int.
         """
@@ -40,7 +44,7 @@ class DataConverters:
         return result
 
     @classmethod
-    def clk_to_timedelta(cls, data: Union[bytes, bytearray]) -> timedelta:
+    def clk_to_timedelta(cls, data: bytes | bytearray) -> timedelta:
         """
         Конвертирует CLK_frm в timedelta.
         """
@@ -49,35 +53,22 @@ class DataConverters:
         hours = cls.bcd_to_int(data[cls.__CLK_HOURS_BYTES])
         minutes = cls.bcd_to_int(data[cls.__CLK_MINUTES_BYTES])
         seconds = cls.bcd_to_int(data[cls.__CLK_SECONDS_BYTES])
-        milliseconds = (
-            cls.bcd_to_int(data[cls.__CLK_HUNDREDTHS_SECOND_BYTES])
-            * 10
+        milliseconds = cls.bcd_to_int(data[cls.__CLK_HUNDREDTHS_SECOND_BYTES]) * 10
+        return timedelta(
+            hours=hours, minutes=minutes, seconds=seconds, milliseconds=milliseconds
         )
-        return timedelta(hours=hours,
-                         minutes=minutes,
-                         seconds=seconds,
-                         milliseconds=milliseconds)
 
 
 class OwenCI8:
     # Параметры СИ8
-    DCNT: bytes = b'\xC1\x73'  # hash параметра DCNT
-    DSPD: bytes = b'\x8F\xC2'  # hash параметра DSPD
-    DTMR: bytes = b'\xE6\x9C'  # hash параметра DTMR
+    DCNT: bytes = b'\xc1\x73'  # hash параметра DCNT
+    DSPD: bytes = b'\x8f\xc2'  # hash параметра DSPD
+    DTMR: bytes = b'\xe6\x9c'  # hash параметра DTMR
 
     PARAMS: dict[bytes, dict[str, Any]] = {
-        DCNT: {
-            'response_len': 22,
-            'converter': DataConverters.bcd_to_int
-        },
-        DSPD: {
-            'response_len': 22,
-            'converter': DataConverters.bcd_to_int
-        },
-        DTMR: {
-            'response_len': 28,
-            'converter': DataConverters.clk_to_timedelta
-        },
+        DCNT: {'response_len': 22, 'converter': DataConverters.bcd_to_int},
+        DSPD: {'response_len': 22, 'converter': DataConverters.bcd_to_int},
+        DTMR: {'response_len': 28, 'converter': DataConverters.clk_to_timedelta},
     }
 
     # Параметры протокола Owen
@@ -96,22 +87,25 @@ class OwenCI8:
 
     __ADDR_ERR_MSG = (
         'Неверный адрес устройства: {actual}. '
-        'Установите значение из диапазона: 0 - {max_addr}')
+        'Установите значение из диапазона: 0 - {max_addr}'
+    )
     __ADDR_LEN_ERR_MSG = (
         'Неверная длина адреса устройства: {actual}. '
-        'Установите одно из значений: {expected}.')
-    __HASH_ERR_MSG = (
-        'Параметр с хешем {actual} не поддерживается устройством.')
+        'Установите одно из значений: {expected}.'
+    )
+    __HASH_ERR_MSG = 'Параметр с хешем {actual} не поддерживается устройством.'
     __HASH_LEN_ERR_MSG = (
-        'Неверная длина хеша параметра: {actual}. Ожидалось: {expected}.')
+        'Неверная длина хеша параметра: {actual}. Ожидалось: {expected}.'
+    )
     __RESPONSE_ADDR_ERR_MSG = (
-        'Неверный адрес устройства в ответном пакете: {actual}. '
-        'Ожидалось: {expected}.')
+        'Неверный адрес устройства в ответном пакете: {actual}. Ожидалось: {expected}.'
+    )
     __RESPONSE_HASH_ERR_MSG = (
-        'Неверный hash параметра в ответном пакете: {actual}. '
-        'Ожидалось: {expected}.')
+        'Неверный hash параметра в ответном пакете: {actual}. Ожидалось: {expected}.'
+    )
     __RESPONSE_CRC_ERR_MSG = (
-        'Неверный CRC в ответном пакете: {actual}. Ожидалось: {expected}')
+        'Неверный CRC в ответном пакете: {actual}. Ожидалось: {expected}'
+    )
     __ZERO_DATA_LEN_ERR_MSG = 'В ответном пакете нет данных.'
 
     def __init__(self, addr: int, addr_len: int = 8):
@@ -123,18 +117,17 @@ class OwenCI8:
         if addr_len not in self.__OWEN_ADDR_LENS:
             raise ImproperlyConfiguredError(
                 self.__ADDR_LEN_ERR_MSG.format(
-                    actual=addr_len,
-                    expected=self.__OWEN_ADDR_LENS
+                    actual=addr_len, expected=self.__OWEN_ADDR_LENS
                 )
             )
         self.addr_len = addr_len
         # проверяем валидность адреса, разделяем на байты
-        max_addr = 2 ** addr_len - 1
+        max_addr = 2**addr_len - 1
         if not isinstance(addr, int) or not 0 <= addr <= max_addr:
             raise ImproperlyConfiguredError(
                 self.__ADDR_ERR_MSG.format(actual=addr, max_addr=max_addr)
             )
-        addr <<= (16 - addr_len)
+        addr <<= 16 - addr_len
         self.addr = addr.to_bytes(2, 'big')
 
     @staticmethod
@@ -146,15 +139,15 @@ class OwenCI8:
         """
         crc = 0x00
         for byte in data:
-            for j in range(8):
+            for _j in range(8):
                 if (byte ^ (crc >> 8)) & 0x80:
                     crc <<= 1
                     crc ^= 0x8F57
                 else:
                     crc <<= 1
                 byte <<= 1
-                byte &= 0xff
-                crc &= 0xffff
+                byte &= 0xFF
+                crc &= 0xFFFF
         return crc.to_bytes(2, 'big')
 
     def get_command_packet(self, parameter_hash: bytes) -> bytearray:
@@ -168,8 +161,8 @@ class OwenCI8:
         if hash_len != self.__OWEN_PARAM_HASH_LEN:
             raise ValueError(
                 self.__HASH_LEN_ERR_MSG.format(
-                    actual=hash_len,
-                    expected=self.__OWEN_PARAM_HASH_LEN)
+                    actual=hash_len, expected=self.__OWEN_PARAM_HASH_LEN
+                )
             )
         # адрес + hash параметра счетчика
         data: bytearray = bytearray(self.addr) + parameter_hash
@@ -200,6 +193,7 @@ class OwenCI8:
         Преобразует ASCII пакет в двоичный.
         Вызывает исключения при ошибках.
         """
+
         try:
             if data[0] != ord(self.__OWEN_PACKET_HEADER):
                 raise PacketHeaderError(packet=data)
@@ -209,15 +203,17 @@ class OwenCI8:
             for i in range(1, len(data) - 1, 2):
                 l_nibble = data[i + 1]
                 h_nibble = data[i]
-                if (not (self.__OWEN_ASCII_LOWEST_CODE
-                         <= l_nibble
-                         <= self.__OWEN_ASCII_HIGHEST_CODE)
-                        or not (self.__OWEN_ASCII_LOWEST_CODE
-                                <= h_nibble
-                                <= self.__OWEN_ASCII_HIGHEST_CODE)):
+                if not (
+                    self.__OWEN_ASCII_LOWEST_CODE
+                    <= l_nibble
+                    <= self.__OWEN_ASCII_HIGHEST_CODE
+                ) or not (
+                    self.__OWEN_ASCII_LOWEST_CODE
+                    <= h_nibble
+                    <= self.__OWEN_ASCII_HIGHEST_CODE
+                ):
                     raise PacketDecodeError(
-                        packet=data,
-                        msg='Пакет содержит недопустимый символ'
+                        packet=data, msg='Пакет содержит недопустимый символ'
                     )
                 l_nibble -= self.__OWEN_ASCII_LOWEST_CODE
                 h_nibble -= self.__OWEN_ASCII_LOWEST_CODE
@@ -225,11 +221,10 @@ class OwenCI8:
             return bin_packet
         except IndexError:
             raise PacketDecodeError(
-                packet=data, msg='Недопустимая длина полученного пакета')
+                packet=data, msg='Недопустимая длина полученного пакета'
+            ) from None
 
-    def check_bin_packet(self,
-                         data: bytearray,
-                         parameter_hash: bytes) -> bytearray:
+    def check_bin_packet(self, data: bytearray, parameter_hash: bytes) -> bytearray:
         """
         Проверяет валидность пакета и возвращает извлеченный блок данных.
         Поднимает исключение если пакет не валиден.
@@ -237,15 +232,13 @@ class OwenCI8:
         try:
             # проверяем CRC
             actual_crc = data[self.__OWEN_CRC_BYTES]
-            calculated_crc = self.calc_owen_crc(
-                data[self.__OWEN_CRC_DATA_BYTES])
+            calculated_crc = self.calc_owen_crc(data[self.__OWEN_CRC_DATA_BYTES])
             if actual_crc != calculated_crc:
                 raise PacketDecodeError(
                     packet=bytes(data),
                     msg=self.__RESPONSE_CRC_ERR_MSG.format(
-                        actual=bytes(actual_crc),
-                        expected=calculated_crc
-                    )
+                        actual=bytes(actual_crc), expected=calculated_crc
+                    ),
                 )
             # проверяем адрес устройства
             packet_addr = data[self.__OWEN_ADDR_BYTES]
@@ -254,9 +247,8 @@ class OwenCI8:
                 raise PacketDecodeError(
                     packet=bytes(data),
                     msg=self.__RESPONSE_ADDR_ERR_MSG.format(
-                        actual=bytes(packet_addr),
-                        expected=self.addr
-                    )
+                        actual=bytes(packet_addr), expected=self.addr
+                    ),
                 )
             # проверяем hash параметра
             actual_hash = data[self.__OWEN_HASH_BYTES]
@@ -264,13 +256,12 @@ class OwenCI8:
                 raise PacketDecodeError(
                     packet=bytes(data),
                     msg=self.__RESPONSE_HASH_ERR_MSG.format(
-                        actual=bytes(actual_hash),
-                        expected=parameter_hash
-                    )
+                        actual=bytes(actual_hash), expected=parameter_hash
+                    ),
                 )
             return data[self.__OWEN_DATA_BYTES]
         except IndexError:
-            raise PacketLenError(packet=data)
+            raise PacketLenError(packet=data) from None
 
     def read_parameter(self, serial_if: Serial, parameter_hash: bytes):
         """
@@ -282,17 +273,14 @@ class OwenCI8:
         if parameter_hash not in (self.DCNT, self.DSPD, self.DTMR):
             raise ValueError(self.__HASH_ERR_MSG.format(actual=parameter_hash))
         serial_if.reset_input_buffer()
-        serial_if.write(
-            self.bin_to_ascii(
-                self.get_command_packet(parameter_hash)
-            )
-        )
+        serial_if.write(self.bin_to_ascii(self.get_command_packet(parameter_hash)))
         serial_if.flush()
         response_expected_len = self.PARAMS[parameter_hash]['response_len']
         ascii_response = serial_if.read(response_expected_len)
+        if not ascii_response:
+            raise TimeoutError
 
-        data = self.check_bin_packet(self.ascii_to_bin(ascii_response),
-                                     parameter_hash)
+        data = self.check_bin_packet(self.ascii_to_bin(ascii_response), parameter_hash)
         if len(data) == 0:
             raise PacketLenError(packet=ascii_response)
 

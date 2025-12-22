@@ -1,0 +1,39 @@
+[tool.ruff]
+line-length = 88
+extend-exclude = [
+    "**/migrations/**",
+    "**/__pycache__/**",
+    ".venv/",
+    "venv/",
+    ".pytest_cache/",
+    ".mypy_cache/",
+    ".ruff_cache/",
+    "node_modules/",
+    "static/",
+    "media/",
+]
+
+[tool.ruff.lint]
+ignore = ["E501"]
+select = [
+    "E", # pycodestyle
+    "F", # Pyflakes
+    "UP", # pyupgrade
+    "B", # flake8-bugbear
+    "SIM", # flake8-simplify
+    "I", # isort
+    "C", # flake8-comprehensions
+]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint.per-file-ignores]
+"backend/Tech/settings/*.py" = ["F403", "F405"]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "single"
+multiline-quotes = "double"
