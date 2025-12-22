@@ -9,6 +9,7 @@ from app.api.config import settings
 from app.owen_poller.exeptions import DeviceNotFound
 from app.owen_poller.owen_poller import SensorsPoller
 from app.owen_poller.sender import PcsPerMinSender
+from app.services.sensor_probe import SensorProbeService
 
 logger = logging.getLogger(__name__)
 application = FastAPI()
@@ -56,6 +57,32 @@ async def get_sensor_readings(name: str):
     except DeviceNotFound as err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=err.args[0])
+
+
+@application.get("/test_sensor/{addr}")
+async def test_sensor(addr: int):
+    try:
+        result = SensorProbeService.probe(addr=addr)
+        
+        return {
+            "addr": result.addr,
+            "value": result.value,
+            "measured_at": result.measured_at,
+            "status": result.status,
+        }
+    
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(err),
+        )
+    
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(err),
+        )
+
 
 # @app.get("/counters")
 # async def get_all_devices():

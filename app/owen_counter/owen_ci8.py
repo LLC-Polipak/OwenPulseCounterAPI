@@ -200,6 +200,7 @@ class OwenCI8:
         Преобразует ASCII пакет в двоичный.
         Вызывает исключения при ошибках.
         """
+        
         try:
             if data[0] != ord(self.__OWEN_PACKET_HEADER):
                 raise PacketHeaderError(packet=data)
@@ -290,7 +291,9 @@ class OwenCI8:
         serial_if.flush()
         response_expected_len = self.PARAMS[parameter_hash]['response_len']
         ascii_response = serial_if.read(response_expected_len)
-
+        if not ascii_response:
+            raise TimeoutError
+        
         data = self.check_bin_packet(self.ascii_to_bin(ascii_response),
                                      parameter_hash)
         if len(data) == 0:

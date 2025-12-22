@@ -45,6 +45,29 @@ class Sensor:
             'reading_time': self.reading.time
         }
 
+@dataclass
+class NoNameSensor:
+    id: int
+    device: OwenCI8
+    parameter_hash: bytes
+    serial: Serial
+    reading: SensorReading = dataclasses.field(default_factory=SensorReading)
+    
+    def get(self) -> dict[str, Any]:
+        try:
+            self.reading.value = self.device.read_parameter(
+                self.serial, self.parameter_hash)
+            self.reading.time = datetime.now()
+        except TimeoutError:
+            logger.error(f'Сенсор {self.id} не ответил')
+        except Exception as err:
+            logger.error(f'Сенсор {self.id} {err}')
+            
+        return {
+            'reading': self.reading.value,
+            'reading_time': self.reading.time
+        }
+
 
 class SensorsPoller:
 
@@ -130,3 +153,28 @@ class SensorsPoller:
             self.last_readings[sensor.name] = copy.copy(current_reading)
         logger.debug(f'{for_sent=}')
         return for_sent
+
+def build_no_name_sensor(sensor_id: int) -> NoNameSensor:
+    try:
+        sensor_settings = settings.sensors_settings[sensor_id]
+    except (IndexError, KeyError):
+        raise DeviceNotFound(sensor_id)
+
+    if not settings.serial_settings:
+        raise RuntimeError("Serial settings not configured")
+
+    serial = Serial(**settings.serial_settings)
+    serial.close()
+    serial.open()
+
+    device_cls = sensor_settings['driver']
+
+    return NoNameSensor(
+        id=sensor_id,
+        device=device_cls(
+            addr=sensor_settings['addr'],
+            addr_len=sensor_settings['addr_len'],
+        ),
+        parameter_hash=sensor_settings['parameter'],
+        serial=serial,
+    )
