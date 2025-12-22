@@ -31,7 +31,8 @@ class Sensor:
     def update(self) -> None:
         try:
             self.reading.value = self.device.read_parameter(
-                self.serial, self.parameter_hash)
+                self.serial, self.parameter_hash
+            )
             self.reading.time = datetime.now()
         except TimeoutError:
             logger.error(f'Сенсор {self.name} не ответил')
@@ -42,8 +43,9 @@ class Sensor:
         return {
             'name': self.name,
             'reading': self.reading.value,
-            'reading_time': self.reading.time
+            'reading_time': self.reading.time,
         }
+
 
 @dataclass
 class NoNameSensor:
@@ -52,25 +54,22 @@ class NoNameSensor:
     parameter_hash: bytes
     serial: Serial
     reading: SensorReading = dataclasses.field(default_factory=SensorReading)
-    
+
     def get(self) -> dict[str, Any]:
         try:
             self.reading.value = self.device.read_parameter(
-                self.serial, self.parameter_hash)
+                self.serial, self.parameter_hash
+            )
             self.reading.time = datetime.now()
         except TimeoutError:
             logger.error(f'Сенсор {self.id} не ответил')
         except Exception as err:
             logger.error(f'Сенсор {self.id} {err}')
-            
-        return {
-            'reading': self.reading.value,
-            'reading_time': self.reading.time
-        }
+
+        return {'reading': self.reading.value, 'reading_time': self.reading.time}
 
 
 class SensorsPoller:
-
     def __init__(self):
         if settings.serial_settings:
             serial = Serial(**settings.serial_settings)
@@ -84,10 +83,11 @@ class SensorsPoller:
             device = sensor_settings['driver']
             self.sensors[sensor_name] = Sensor(
                 name=sensor_name,
-                device=device(addr=sensor_settings['addr'],
-                              addr_len=sensor_settings['addr_len']),
+                device=device(
+                    addr=sensor_settings['addr'], addr_len=sensor_settings['addr_len']
+                ),
                 parameter_hash=sensor_settings['parameter'],
-                serial=serial
+                serial=serial,
             )
         self.last_readings = {}
 
@@ -105,11 +105,9 @@ class SensorsPoller:
         try:
             return self.sensors[sensor_name].get()
         except KeyError:
-            raise DeviceNotFound(sensor_name)
+            raise DeviceNotFound(sensor_name) from None
 
-    def get_list_readings(
-            self, work_centers: list[str]
-    ) -> list[dict[str, Any]]:
+    def get_list_readings(self, work_centers: list[str]) -> list[dict[str, Any]]:
         """
         Запрос данных по списку slug рабочих центров.
         :param work_centers: Список slug рабочих центров.
@@ -122,7 +120,7 @@ class SensorsPoller:
                 'sensor': work_center,
                 'value': None,
                 'measured_at': measured_at,
-                'status': 'NOT FOUND'
+                'status': 'NOT FOUND',
             }
             if not (sensor := self.sensors.get(work_center)):
                 logger.error(f'Device {work_center} not found in settings.py')
@@ -133,20 +131,20 @@ class SensorsPoller:
                 response['status'] = 'OFFLINE'
                 for_sent.append(response)
                 continue
-            previous_reading: SensorReading = self.last_readings.get(
-                sensor.name)
+            previous_reading: SensorReading = self.last_readings.get(sensor.name)
             if previous_reading is None or previous_reading.value is None:
-                self.last_readings[sensor.name] = copy.copy(
-                    current_reading)
+                self.last_readings[sensor.name] = copy.copy(current_reading)
                 response['status'] = 'OK'
                 for_sent.append(response)
                 continue
             duration = current_reading.time - previous_reading.time
             if duration.total_seconds() <= 0:
                 continue
-            speed = ((current_reading.value - previous_reading.value)
-                     / duration.total_seconds()
-                     * 60)
+            speed = (
+                (current_reading.value - previous_reading.value)
+                / duration.total_seconds()
+                * 60
+            )
             response['value'] = speed
             response['status'] = 'OK'
             for_sent.append(response)
@@ -154,14 +152,15 @@ class SensorsPoller:
         logger.debug(f'{for_sent=}')
         return for_sent
 
+
 def build_no_name_sensor(sensor_id: int) -> NoNameSensor:
     try:
         sensor_settings = settings.sensors_settings[sensor_id]
     except (IndexError, KeyError):
-        raise DeviceNotFound(sensor_id)
+        raise DeviceNotFound(sensor_id) from None
 
     if not settings.serial_settings:
-        raise RuntimeError("Serial settings not configured")
+        raise RuntimeError('Serial settings not configured')
 
     serial = Serial(**settings.serial_settings)
     serial.close()
