@@ -61,6 +61,8 @@ class DataConverters:
 
 class OwenCI8:
     # Параметры СИ8
+    MAX_VALUE: int = 9_999_999
+    
     DCNT: bytes = b'\xc1\x73'  # hash параметра DCNT
     DSPD: bytes = b'\x8f\xc2'  # hash параметра DSPD
     DTMR: bytes = b'\xe6\x9c'  # hash параметра DTMR

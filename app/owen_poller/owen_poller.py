@@ -19,6 +19,7 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
+
 @dataclass
 class Sensor:
     name: str
@@ -26,6 +27,7 @@ class Sensor:
     parameter_hash: bytes
     serial: Serial
     reading: SensorReading = dataclasses.field(default_factory=SensorReading)
+    
     # reading_time: datetime = datetime.now()
 
     def update(self) -> None:
@@ -140,11 +142,13 @@ class SensorsPoller:
             duration = current_reading.time - previous_reading.time
             if duration.total_seconds() <= 0:
                 continue
-            speed = (
-                (current_reading.value - previous_reading.value)
-                / duration.total_seconds()
-                * 60
-            )
+            if current_reading.value < previous_reading.value:
+                value_diff = sensor.device.MAX_VALUE - previous_reading.value + current_reading.value
+            else:
+                value_diff = current_reading.value - previous_reading.value
+                
+            speed = value_diff / duration.total_seconds() * 60
+            
             response['value'] = speed
             response['status'] = 'OK'
             for_sent.append(response)
