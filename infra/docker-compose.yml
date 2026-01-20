@@ -2,7 +2,7 @@ name: counter
 
 services:
   app:
-    image: aleksup/owen_counter_api:latest
+    image: polipak/owen_counter_api:latest
     restart: unless-stopped
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
