@@ -5,7 +5,7 @@ import logging
 import requests
 from requests import JSONDecodeError, RequestException
 
-from app.api.config import configure_logging, settings
+from app.api.config import config, configure_logging
 from app.owen_poller.owen_poller import SensorReading
 
 configure_logging()
@@ -50,10 +50,10 @@ class PcsPerMinSender:
                 try:
                     logger.info('Отправка данных в PhyHub..')
                     response = requests.post(
-                        url=settings.receiver_url,
-                        headers={'Authorization': f'Token {settings.receiver_token}'},
+                        url=config.receiver_url,
+                        headers={'Authorization': f'Token {config.receiver_token}'},
                         json=for_sent,
-                        timeout=settings.poller_connection_timeout,
+                        timeout=config.poller_connection_timeout,
                     )
                     logger.info(response.json())
                 except (RequestException, JSONDecodeError) as err:
