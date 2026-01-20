@@ -1,107 +1,109 @@
 import asyncio
 import copy
-import dataclasses
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from serial import Serial
 
-from app import settings
-from app.api.common import SensorReading
+from app.api.common import SensorReading, SensorRuntimeState
 from app.api.config import configure_logging
 from app.owen_counter.owen_ci8 import OwenCI8
 
 from .exeptions import DeviceNotFound
+from .sensor import Sensor
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 
-
-@dataclass
-class Sensor:
-    name: str
-    device: OwenCI8
-    parameter_hash: bytes
-    serial: Serial
-    reading: SensorReading = dataclasses.field(default_factory=SensorReading)
-    
-    # reading_time: datetime = datetime.now()
-
-    def update(self) -> None:
-        try:
-            self.reading.value = self.device.read_parameter(
-                self.serial, self.parameter_hash
-            )
-            self.reading.time = datetime.now()
-        except TimeoutError:
-            logger.error(f'Сенсор {self.name} не ответил')
-        except Exception as err:
-            logger.error(f'Сенсор {self.name} {err}')
-
-    def get(self) -> dict[str, Any]:
-        return {
-            'name': self.name,
-            'reading': self.reading.value,
-            'reading_time': self.reading.time,
-        }
-
-
-@dataclass
-class NoNameSensor:
-    id: int
-    device: OwenCI8
-    parameter_hash: bytes
-    serial: Serial
-    reading: SensorReading = dataclasses.field(default_factory=SensorReading)
-
-    def get(self) -> dict[str, Any]:
-        try:
-            self.reading.value = self.device.read_parameter(
-                self.serial, self.parameter_hash
-            )
-            self.reading.time = datetime.now()
-        except TimeoutError:
-            logger.error(f'Сенсор {self.id} не ответил')
-        except Exception as err:
-            logger.error(f'Сенсор {self.id} {err}')
-
-        return {'reading': self.reading.value, 'reading_time': self.reading.time}
-
-
 class SensorsPoller:
-    def __init__(self):
+    def __init__(self, settings):
+        self.settings = settings
+        self.is_active = False
         if settings.serial_settings:
-            serial = Serial(**settings.serial_settings)
-            serial.close()
-            serial.open()
+            self.serial = Serial(**settings.serial_settings)
+            self.serial.close()
+            self.serial.open()
         else:
-            serial = None
+            self.serial = None
         self.sensors: dict[str, Sensor] = {}
         for sensor_settings in settings.sensors_settings:
-            sensor_name = sensor_settings['name']
-            device = sensor_settings['driver']
-            self.sensors[sensor_name] = Sensor(
-                name=sensor_name,
-                device=device(
-                    addr=sensor_settings['addr'], addr_len=sensor_settings['addr_len']
-                ),
-                parameter_hash=sensor_settings['parameter'],
-                serial=serial,
+            print(sensor_settings)
+            self.sensors[sensor_settings.get('name')] = self._create_sensor(
+                sensor_settings
             )
+
+        self.state: dict[str, SensorRuntimeState] = {
+            name: SensorRuntimeState() for name in self.sensors
+        }
         self.last_readings = {}
+
+    def _create_sensor(self, sensor_settings: dict[str, Any]) -> Sensor:
+        sensor_name = sensor_settings['name']
+        device = sensor_settings['driver']
+        return Sensor(
+            name=sensor_name,
+            device=device(
+                addr=sensor_settings['addr'], addr_len=sensor_settings['addr_len']
+            ),
+            parameter_hash=sensor_settings['parameter'],
+            serial=self.serial,
+        )
+
+    async def sensors_update(self):
+        for sensor in self.sensors.values():
+            sensor.update()
+            state = self.state[sensor.name]
+
+            reading = sensor.reading
+            if reading.value is None:
+                await asyncio.sleep(0)
+                continue
+
+            # --- availability ---
+            state.last_success_ts = reading.time
+
+            # --- diff ---
+            if state.last_value is not None:
+                if reading.value < state.last_value:
+                    diff = sensor.device.MAX_VALUE - state.last_value + reading.value
+                else:
+                    diff = reading.value - state.last_value
+            else:
+                diff = 0
+
+            # --- minute aggregation ---
+            minute = reading.time.replace(second=0, microsecond=0)
+            if state.current_minute != minute:
+                state.last_minute_total = state.current_minute_total
+                state.last_minute_ts = state.current_minute
+                state.current_minute_total = 0
+                state.current_minute = minute
+
+            state.current_minute_total += diff
+
+            state.last_value = reading.value
+            state.last_ts = reading.time
+
+            await asyncio.sleep(0)
 
     async def poll(self):
         """
         Цикл опроса устройств.
         """
-        while True:
-            for sensor in self.sensors.values():
-                await asyncio.sleep(0)
-                sensor.update()
-            await asyncio.sleep(settings.POLL_DELAY)
+        self.is_active = True
+        try:
+            while self.is_active:
+                await self.sensors_update()
+                await asyncio.sleep(self.settings.POLL_DELAY)
+        except asyncio.CancelledError:
+            logger.info('Poller cancelled')
+            self.is_active = False
+            raise
+
+    def stop(self):
+        self.is_active = False
 
     def get_sensor_readings(self, sensor_name: str) -> dict[str, Any]:
         try:
@@ -143,12 +145,16 @@ class SensorsPoller:
             if duration.total_seconds() <= 0:
                 continue
             if current_reading.value < previous_reading.value:
-                value_diff = sensor.device.MAX_VALUE - previous_reading.value + current_reading.value
+                value_diff = (
+                    sensor.device.MAX_VALUE
+                    - previous_reading.value
+                    + current_reading.value
+                )
             else:
                 value_diff = current_reading.value - previous_reading.value
-                
+
             speed = value_diff / duration.total_seconds() * 60
-            
+
             response['value'] = speed
             response['status'] = 'OK'
             for_sent.append(response)
@@ -156,28 +162,57 @@ class SensorsPoller:
         logger.debug(f'{for_sent=}')
         return for_sent
 
+    def get_minute_state(self, sensors: list[str]) -> list[dict]:
+        now = datetime.now()
+        result = []
 
-def build_no_name_sensor(sensor_id: int) -> NoNameSensor:
-    try:
-        sensor_settings = settings.sensors_settings[sensor_id]
-    except (IndexError, KeyError):
-        raise DeviceNotFound(sensor_id) from None
+        for name in sensors:
+            if name not in self.sensors:
+                result.append(
+                    {
+                        'sensor': name,
+                        'measured_at': None,
+                        'value': None,
+                        'status': 'NOT_FOUND',
+                        'true_value': None,
+                    }
+                )
+                continue
 
-    if not settings.serial_settings:
-        raise RuntimeError('Serial settings not configured')
+            state = self.state.get(name)
+            if not state:
+                continue
 
-    serial = Serial(**settings.serial_settings)
-    serial.close()
-    serial.open()
+            if (
+                not state.last_success_ts
+                or not state.last_minute_ts
+                or (now - state.last_success_ts).total_seconds() > 60
+            ):
+                status = 'UNKNOWN'
+            elif state.last_minute_total == 0:
+                status = 'STOP'
+            else:
+                status = 'OK'
 
-    device_cls = sensor_settings['driver']
+            result.append(
+                {
+                    'sensor': name,
+                    'measured_at': state.last_minute_ts,
+                    'value': state.last_minute_total,
+                    'status': status,
+                    'true_value': state.last_value,
+                }
+            )
 
-    return NoNameSensor(
-        id=sensor_id,
-        device=device_cls(
-            addr=sensor_settings['addr'],
-            addr_len=sensor_settings['addr_len'],
-        ),
-        parameter_hash=sensor_settings['parameter'],
-        serial=serial,
-    )
+        return result
+
+    def test_sensor_by_addr(self, addr: int) -> Sensor:
+        return self._create_sensor(
+            {
+                'name': 'test',
+                'driver': OwenCI8,
+                'addr': addr,
+                'addr_len': 8,
+                'parameter': OwenCI8.DCNT,
+            }
+        )

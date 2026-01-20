@@ -1,10 +1,11 @@
 import logging
 from pathlib import Path
 
-from pydantic import BaseSettings, HttpUrl
+from pydantic import HttpUrl
+from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
+class Config(BaseSettings):
     receiver_url: HttpUrl
     receiver_token: str
     poller_active: bool = False
@@ -15,10 +16,11 @@ class Settings(BaseSettings):
         # env_file = '.env'
         env_file = f'{Path(__file__).resolve().parent.parent}/.env'
         env_file_encoding = 'utf-8'
+        extra = 'ignore'
 
 
-settings = Settings()
-logging_level = logging.DEBUG if settings.debug else logging.INFO
+config = Config()
+logging_level = logging.DEBUG if config.debug else logging.INFO
 
 
 def configure_logging(level=logging_level):
