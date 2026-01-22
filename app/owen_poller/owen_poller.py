@@ -6,12 +6,14 @@ from typing import Any
 
 from serial import Serial
 
-from app.api.common import SensorReading, SensorRuntimeState
+from app.api.common import SensorReading
 from app.api.config import configure_logging
 from app.owen_counter.owen_ci8 import OwenCI8
 
 from .exeptions import DeviceNotFound
 from .sensor import Sensor
+from .state import SensorRuntimeState
+from .utils import finalize_previous_minute, start_new_minute
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -29,7 +31,6 @@ class SensorsPoller:
             self.serial = None
         self.sensors: dict[str, Sensor] = {}
         for sensor_settings in settings.sensors_settings:
-            print(sensor_settings)
             self.sensors[sensor_settings.get('name')] = self._create_sensor(
                 sensor_settings
             )
@@ -52,40 +53,33 @@ class SensorsPoller:
         )
 
     async def sensors_update(self):
+        now = datetime.now()
+        minute = now.replace(second=0, microsecond=0)
+
         for sensor in self.sensors.values():
-            sensor.update()
             state = self.state[sensor.name]
 
+            if state.current_minute != minute:
+                if state.current_minute is not None:
+                    finalize_previous_minute(state, sensor)
+                start_new_minute(state, minute)
+
+            state.attempt_count += 1
+            if sensor.update():
+                state.success_count += 1
             reading = sensor.reading
+
             if reading.value is None:
-                await asyncio.sleep(0)
                 continue
 
-            # --- availability ---
             state.last_success_ts = reading.time
 
-            # --- diff ---
-            if state.last_value is not None:
-                if reading.value < state.last_value:
-                    diff = sensor.device.MAX_VALUE - state.last_value + reading.value
-                else:
-                    diff = reading.value - state.last_value
-            else:
-                diff = 0
+            if state.minute_start_value is None:
+                state.minute_start_value = reading.value
 
-            # --- minute aggregation ---
-            minute = reading.time.replace(second=0, microsecond=0)
-            if state.current_minute != minute:
-                state.last_minute_total = state.current_minute_total
-                state.last_minute_ts = state.current_minute
-                state.current_minute_total = 0
-                state.current_minute = minute
-
-            state.current_minute_total += diff
-
+            state.minute_end_value = reading.value
             state.last_value = reading.value
             state.last_ts = reading.time
-
             await asyncio.sleep(0)
 
     async def poll(self):
@@ -163,7 +157,6 @@ class SensorsPoller:
         return for_sent
 
     def get_minute_state(self, sensors: list[str]) -> list[dict]:
-        now = datetime.now()
         result = []
 
         for name in sensors:
@@ -171,38 +164,36 @@ class SensorsPoller:
                 result.append(
                     {
                         'sensor': name,
-                        'measured_at': None,
-                        'value': None,
                         'status': 'NOT_FOUND',
-                        'true_value': None,
+                        'value': None,
+                        'measured_at': None,
+                        'changed_at': None,
+                        'success_rate': 0.0,
                     }
                 )
                 continue
 
-            state = self.state.get(name)
-            if not state:
+            state = self.state[name]
+            snapshot = state.last_minute_snapshot
+
+            if not snapshot or snapshot.minute is None:
                 continue
 
-            if (
-                not state.last_success_ts
-                or not state.last_minute_ts
-                or (now - state.last_success_ts).total_seconds() > 60
-            ):
-                status = 'UNKNOWN'
-            elif state.last_minute_total == 0:
-                status = 'STOP'
-            else:
-                status = 'OK'
+            status = snapshot.status
 
             result.append(
                 {
                     'sensor': name,
-                    'measured_at': state.last_minute_ts,
-                    'value': state.last_minute_total,
                     'status': status,
+                    'value': snapshot.value,
+                    'measured_at': snapshot.minute,
+                    'changed_at': snapshot.last_seen_at,
+                    'success_rate': snapshot.success_rate,
                     'true_value': state.last_value,
                 }
             )
+
+        logger.error(f'get_minute_state={result}')
 
         return result
 

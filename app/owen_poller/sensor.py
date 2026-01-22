@@ -27,18 +27,20 @@ class Sensor:
         self.parameter_hash = parameter_hash
         self.serial = serial
         self.reading = SensorReading()
-        # reading_time: datetime = datetime.now()
 
-    def update(self) -> None:
+    def update(self) -> bool:
         try:
             self.reading.value = self.device.read_parameter(
                 self.serial, self.parameter_hash
             )
             self.reading.time = datetime.now()
+            return True
         except TimeoutError:
-            logger.error(f'Сенсор {self.name} не ответил')
+            logger.warning(f'Сенсор {self.name} не ответил')
+            return False
         except Exception as err:
-            logger.error(f'Сенсор {self.name} {err}')
+            logger.exception(f'Сенсор {self.name}', exc_info=err)
+            return False
 
     def get(self) -> dict[str, Any]:
         return {
