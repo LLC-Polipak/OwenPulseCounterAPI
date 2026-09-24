@@ -5,12 +5,12 @@ from typing import Literal, Optional
 
 @dataclass
 class SensorRuntimeState:
-    last_value: int | None = None
+    last_value: float | int | None = None
     last_ts: datetime | None = None
 
     current_minute: datetime | None = None
-    minute_start_value: int | None = None
-    minute_end_value: int | None = None
+    minute_start_value: float | int | None = None
+    minute_end_value: float | int | None = None
 
     attempt_count: int = 0
     success_count: int = 0
@@ -19,12 +19,11 @@ class SensorRuntimeState:
 
     last_minute_snapshot: Optional['SensorMinuteSnapshot'] = None
 
-
 @dataclass
 class SensorMinuteSnapshot:
     minute: datetime
 
-    value: int | None
+    value: float | int | None  # Обновили
     status: Literal['OK', 'STOP', 'UNKNOWN']
 
     success_rate: float

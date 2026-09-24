@@ -6,6 +6,7 @@ from serial import Serial
 
 from app.api.common import SensorReading
 from app.api.config import configure_logging
+from app.owen_counter.modbus_pvt110 import ModbusPVT110
 from app.owen_counter.owen_ci8 import OwenCI8
 
 configure_logging()
@@ -18,8 +19,8 @@ class Sensor:
     def __init__(
         self,
         name: str,
-        device: OwenCI8,
-        parameter_hash: bytes,
+        device: OwenCI8 | ModbusPVT110,
+        parameter_hash: bytes | int,
         serial: Serial,
     ):
         self.name = name
@@ -34,6 +35,7 @@ class Sensor:
                 self.serial, self.parameter_hash
             )
             self.reading.time = datetime.now()
+            logger.info(f"Параметр: {self.parameter_hash}. Значение: {self.reading.value}")
             return True
         except TimeoutError:
             logger.warning(f'Сенсор {self.name} не ответил')
