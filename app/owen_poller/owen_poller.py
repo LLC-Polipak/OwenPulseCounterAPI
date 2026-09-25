@@ -294,9 +294,7 @@ class SensorsPoller:
 
         if self.serial is None:
             kwargs = self.settings.serial_settings.copy()
-            port = kwargs.pop('port', None)
             self.serial = Serial(**kwargs)
-            self.serial.port = port
 
         if self.serial.is_open:
             return True
