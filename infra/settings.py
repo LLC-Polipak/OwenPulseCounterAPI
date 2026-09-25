@@ -1,7 +1,7 @@
 from typing import Any
 
-from app.owen_counter.owen_ci8 import OwenCI8
-from app.owen_counter.modbus_pvt110 import ModbusPVT110
+from app.owen_drivers.owen_ci8 import OwenCI8
+from app.owen_drivers.modbus_pvt110 import ModbusPVT110
 
 serial_settings: dict[str, Any] = {
     'port': '/dev/ttyUSB0',

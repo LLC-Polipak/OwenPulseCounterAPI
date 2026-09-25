@@ -5,7 +5,8 @@ from typing import Any
 from serial import Serial
 
 from app.api.config import configure_logging
-from app.owen_counter.exeptions import (
+from app.owen_drivers.base_driver import BaseDriver
+from app.owen_drivers.exeptions import (
     BCDValueError,
     ImproperlyConfiguredError,
     PacketDecodeError,
@@ -59,7 +60,12 @@ class DataConverters:
         )
 
 
-class OwenCI8:
+class OwenCI8(BaseDriver):
+    """Драйвер для работы со счетчиком импульсов ОВЕН СИ8 по протоколу ОВЕН."""
+
+    is_cumulative = True
+    poll_priority = 2
+
     # Параметры СИ8
     MAX_VALUE: int = 9_999_999
 

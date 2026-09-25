@@ -5,6 +5,11 @@ from typing import Literal, Optional
 
 @dataclass
 class SensorRuntimeState:
+    """
+    Состояние сенсора в режиме реального времени.
+    Собирает метрики успешности опросов и данные для формирования минутных срезов.
+    """
+
     last_value: float | int | None = None
     last_ts: datetime | None = None
 
@@ -19,11 +24,17 @@ class SensorRuntimeState:
 
     last_minute_snapshot: Optional['SensorMinuteSnapshot'] = None
 
+
 @dataclass
 class SensorMinuteSnapshot:
+    """
+    Фиксированный "снимок" состояния сенсора по окончании минуты.
+    Используется для отправки исторической отчетности.
+    """
+
     minute: datetime
 
-    value: float | int | None  # Обновили
+    value: float | int | None
     status: Literal['OK', 'STOP', 'UNKNOWN']
 
     success_rate: float
