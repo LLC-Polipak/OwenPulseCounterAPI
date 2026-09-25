@@ -13,49 +13,69 @@ logger = logging.getLogger(__name__)
 
 
 class PcsPerMinSender:
+    """
+    Фоновая задача для периодической отправки собранных данных на внешний сервер (PhyHub).
+    Самостоятельно обрабатывает разницу между накопительными и мгновенными сенсорами.
+    """
+
     def __init__(self, poller):
+        """
+        :param poller: Ссылка на инстанс SensorsPoller для доступа к данным сенсоров.
+        """
         self.poller = poller
         self.last_readings = {}
 
     async def send_readings(self):
+        """
+        Бесконечный цикл формирования JSON payload'а и отправки его по HTTP.
+        Вызывается раз в 30 секунд.
+        """
         while True:
             for_sent = []
             for sensor in self.poller.sensors.values():
                 current_reading: SensorReading = sensor.reading
-                logger.debug(f'Reading sensor {sensor.name}: {current_reading.value}')
                 if current_reading.value is None:
                     continue
-                previous_reading: SensorReading = self.last_readings.get(sensor.name)
-                if previous_reading is None or previous_reading.value is None:
-                    self.last_readings[sensor.name] = copy.copy(current_reading)
-                    continue
-                duration = current_reading.time - previous_reading.time
-                if duration.total_seconds() <= 0:
-                    continue
-                speed = (
-                    (current_reading.value - previous_reading.value)
-                    / duration.total_seconds()
-                    * 60
-                )
-                for_sent.append(
-                    {
-                        'sensor': sensor.name,
-                        'value': speed,
-                        # 'measured_at': current_reading.time.
-                    }
-                )
+
+                if not sensor.device.is_cumulative:
+                    val_to_send = current_reading.value
+                else:
+                    previous_reading = self.last_readings.get(sensor.name)
+                    if previous_reading is None or previous_reading.value is None:
+                        self.last_readings[sensor.name] = copy.copy(current_reading)
+                        continue
+
+                    duration = current_reading.time - previous_reading.time
+                    if duration.total_seconds() <= 0:
+                        continue
+
+                    speed = (
+                        (current_reading.value - previous_reading.value)
+                        / duration.total_seconds()
+                        * 60
+                    )
+                    val_to_send = speed
+
+                payload = {'sensor': sensor.name}
+
+                if isinstance(val_to_send, dict):
+                    payload.update(val_to_send)
+                else:
+                    payload['value'] = val_to_send
+
+                for_sent.append(payload)
                 self.last_readings[sensor.name] = copy.copy(current_reading)
-            logger.debug(f'{for_sent=}')
+
             if for_sent:
                 try:
                     logger.info('Отправка данных в PhyHub..')
-                    response = requests.post(
+                    requests.post(
                         url=config.receiver_url,
                         headers={'Authorization': f'Token {config.receiver_token}'},
                         json=for_sent,
                         timeout=config.poller_connection_timeout,
                     )
-                    logger.info(response.json())
                 except (RequestException, JSONDecodeError) as err:
                     logger.error(f'Ошибка отправки:\n{err}')
+
             await asyncio.sleep(30)
