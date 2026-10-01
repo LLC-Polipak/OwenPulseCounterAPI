@@ -2,12 +2,13 @@ import unittest
 from collections import namedtuple
 from datetime import timedelta
 
-from .exeptions import (
+from app.owen_drivers.exceptions import (
     BCDValueError,
     ImproperlyConfiguredError,
     PacketDecodeError,
     PacketHeaderError,
 )
+
 from .owen_ci8 import DataConverters, OwenCI8
 
 

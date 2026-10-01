@@ -24,11 +24,10 @@ sensors_settings = [
 
         'name': 'dev1_pvt',
         'driver': ModbusPVT110,
-        'addr': 16,
-        'addr_len': 8,
-        'parameter': None
+        'addr': 16
     }
 ]
 
-POLL_DELAY = 0.5
-INTER_SENSOR_DELAY = 0.25
+POLL_DELAY: float = 0.5
+INTER_SENSOR_DELAY: float = 0.25
+USE_MOCK_PROVIDER: bool = False
