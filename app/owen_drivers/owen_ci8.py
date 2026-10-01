@@ -64,7 +64,7 @@ class OwenCI8(BaseDriver):
     """Драйвер для работы со счетчиком импульсов ОВЕН СИ8 по протоколу ОВЕН."""
 
     poll_priority = 2
-    poll_interval = 0.5
+    poll_interval = 0.4
 
     min_success_rate: float = 0.50
 
@@ -279,11 +279,10 @@ class OwenCI8(BaseDriver):
         except IndexError:
             raise PacketLenError(packet=data) from None
 
-    def read_parameter(self, provider: BaseDataProvider, *args, **kwargs):
+    def read_parameter(self, provider: BaseDataProvider, **kwargs):
         """
         Считывает параметр счетчика импульсов.
         :param provider: Поставщик данных.
-        :param args: Не используется в данном драйвере.
         :param kwargs: Нужен для хранения параметра хэша.
         :return: Значение параметра.
         """

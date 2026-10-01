@@ -7,8 +7,6 @@ from app.owen_poller.enums import SensorStatus
 if TYPE_CHECKING:
     from app.owen_drivers.base_driver import BaseDriver
 
-OFFLINE_THRESHOLD = 60
-
 
 @dataclass
 class SensorRuntimeState:

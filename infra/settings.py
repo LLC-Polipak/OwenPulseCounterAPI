@@ -28,6 +28,6 @@ sensors_settings = [
     }
 ]
 
-POLL_DELAY: float = 0.5
-INTER_SENSOR_DELAY: float = 0.25
+POLL_DELAY: float = 0.25
+INTER_SENSOR_DELAY: float = 0.15
 USE_MOCK_PROVIDER: bool = False

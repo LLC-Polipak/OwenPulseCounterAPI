@@ -22,7 +22,7 @@ class ModbusPVT110(BaseDriver):
     """
 
     poll_priority = 1
-    poll_interval = 15.0
+    poll_interval = 5.0
 
     min_success_rate: float = 0.25
 
@@ -148,13 +148,12 @@ class ModbusPVT110(BaseDriver):
         return round(value, 2)
 
     def read_parameter(
-        self, provider: BaseDataProvider, *args, **kwargs
+        self, provider: BaseDataProvider, **kwargs
     ) -> dict[str, float] | None:
         """
         Считывает оба параметра с прибора: температуру и влажность.
 
         :param provider: Поставщик данных.
-        :param args: Не используется в данном драйвере.
         :param kwargs: Не используется в данном драйвере.
         :return: Словарь со значениями температуры и влажности, либо None в случае сбоя.
         """

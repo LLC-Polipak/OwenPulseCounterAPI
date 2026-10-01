@@ -16,8 +16,6 @@
 1. **ОВЕН СИ8** (протокол ОВЕН) — накопительные счетчики импульсов (расчет скорости конвейера).
 2. **ОВЕН ПВТ-110-Н5-RS** (протокол Modbus RTU) — термогигрометры (мгновенные значения °C и %).
 
----
-
 ## 🏗 Архитектура
 
 Устройство проекта выглядит следующим образом:
@@ -32,8 +30,6 @@
 * **`app/owen_poller/state.py`** — `SensorRuntimeState` хранит метрики успешности опроса (Success Rate), а `SensorMinuteSnapshot` - "снимок" состояния сенсора на конец минуты.
 * **`app/owen_poller/sensor.py`** — связывает драйвер, порт связи и хранилище значений. 
 
----
-
 ## 🚀 Запуск проекта (Docker)
 
 Проект содержит два Dockerfile: для разработки (с линтерами и hot-reload) и для продакшена.
@@ -43,7 +39,7 @@
 
 ```bash
 # Сборка образа для разработки
-docker build -t sensor-app:dev -f Dockerfile.dev .
+docker build -t sensor-app:dev -f DevDockerfile .
 
 # Запуск с пробросом кода для горячей перезагрузки (Hot Reload)
 docker run -p 8000:8000 -v $(pwd):/code sensor-app:dev
@@ -59,8 +55,6 @@ docker build -t sensor-app:prod -f Dockerfile .
 # Запуск с пробросом устройства внутрь контейнера (пример для Linux)
 docker run -d --name phyhub-gateway -p 8000:8000 --device=/dev/ttyUSB0 sensor-app:prod
 ```
-
----
 
 ## 🧩 Как добавить новый прибор?
 

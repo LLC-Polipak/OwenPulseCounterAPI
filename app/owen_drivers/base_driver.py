@@ -38,13 +38,12 @@ class BaseDriver(ABC):
         return round(success_count / attempt_count, 3)
 
     @abstractmethod
-    def read_parameter(self, provider: BaseDataProvider, *args, **kwargs) -> Any:
+    def read_parameter(self, provider: BaseDataProvider, **kwargs) -> Any:
         """
         Чтение параметра с физического устройства.
 
         :param provider: Поставщик данных.
-        :param args: Параметр для хранения обычных аргументов.
-        :param kwargs: Параметр для хранения аргументов по ключам.
+        :param kwargs: Любые дополнительные параметры.
         :return: Прочитанное значение (int, float, dict и т.д.) или None при ошибке
         """
         pass

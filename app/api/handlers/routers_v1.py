@@ -43,18 +43,30 @@ async def get_sensor_readings(
 
 
 @router.get('/sensors/config/', tags=['Sensors'])
-async def get_sensors_config(registry: 'DeviceRegistry' = Depends(get_device_registry)):
+async def get_sensors_config(poller: 'SensorsPoller' = Depends(get_sensor_poller)):
     config_list = []
-    for sensor in registry.get_sorted_sensors():
+
+    for s_settings in poller.settings.sensors_settings:
+        driver_class = s_settings.get('driver')
+
+        param = s_settings.get('parameter')
+        if isinstance(param, bytes):
+            param_repr = f'0x{param.hex()}'
+        else:
+            param_repr = str(param) if param is not None else None
+
         config_list.append(
             {
-                'name': sensor.name,
-                'driver': sensor.device.__class__.__name__,
-                'address': sensor.device.addr,
-                'poll_priority': sensor.device.poll_priority,
-                'poll_interval_sec': sensor.device.poll_interval,
+                'name': s_settings.get('name'),
+                'driver': driver_class.__name__ if driver_class else 'Unknown',
+                'address': s_settings.get('addr'),
+                'addr_len': s_settings.get('addr_len'),
+                'parameter': param_repr,
+                'poll_priority': getattr(driver_class, 'poll_priority', None),
+                'poll_interval_sec': getattr(driver_class, 'poll_interval', None),
             }
         )
+
     return config_list
 
 
