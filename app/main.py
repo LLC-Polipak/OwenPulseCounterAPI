@@ -10,7 +10,7 @@ from app.api.config import config
 from app.api.handlers.health_check import router as health_check_router
 from app.api.handlers.routers_v1 import router as routers_v1
 from app.api.handlers.routers_v2 import router as routers_v2
-from app.owen_poller.owen_poller import SensorsPoller
+from app.owen_poller.poller import SensorsPoller
 from app.owen_poller.sender import PcsPerMinSender
 
 logger = logging.getLogger(__name__)

@@ -5,8 +5,8 @@ import logging
 import requests
 from requests import JSONDecodeError, RequestException
 
+from app.api.common import SensorReading
 from app.api.config import config, configure_logging
-from app.owen_poller.owen_poller import SensorReading
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -32,50 +32,60 @@ class PcsPerMinSender:
         """
         while True:
             for_sent = []
-            for sensor in self.poller.sensors.values():
+
+            for sensor in self.poller.registry.sensors.values():
                 current_reading: SensorReading = sensor.reading
+
                 if current_reading.value is None:
                     continue
 
-                if not sensor.device.is_cumulative:
-                    val_to_send = current_reading.value
+                previous_reading: SensorReading | None = self.last_readings.get(
+                    sensor.name
+                )
+
+                if previous_reading is None or previous_reading.value is None:
+                    duration = 0.0
+                    prev_val = current_reading.value
+                    self.last_readings[sensor.name] = copy.copy(current_reading)
                 else:
-                    previous_reading = self.last_readings.get(sensor.name)
-                    if previous_reading is None or previous_reading.value is None:
-                        self.last_readings[sensor.name] = copy.copy(current_reading)
-                        continue
+                    duration = (
+                        current_reading.time - previous_reading.time
+                    ).total_seconds()
+                    prev_val = previous_reading.value
 
-                    duration = current_reading.time - previous_reading.time
-                    if duration.total_seconds() <= 0:
-                        continue
+                if duration <= 0 and previous_reading is not None:
+                    duration = 0.0
+                    prev_val = current_reading.value
 
-                    speed = (
-                        (current_reading.value - previous_reading.value)
-                        / duration.total_seconds()
-                        * 60
-                    )
-                    val_to_send = speed
+                metric = sensor.device.calculate_instant_metric(
+                    curr_val=current_reading.value,
+                    prev_val=prev_val,
+                    duration_sec=duration,
+                )
 
                 payload = {'sensor': sensor.name}
 
-                if isinstance(val_to_send, dict):
-                    payload.update(val_to_send)
+                if isinstance(metric, dict):
+                    payload.update(metric)
                 else:
-                    payload['value'] = val_to_send
+                    payload['value'] = metric
 
                 for_sent.append(payload)
-                self.last_readings[sensor.name] = copy.copy(current_reading)
+
+                if duration > 0:
+                    self.last_readings[sensor.name] = copy.copy(current_reading)
 
             if for_sent:
                 try:
-                    logger.info('Отправка данных в PhyHub..')
-                    requests.post(
+                    logger.info(f'Отправка {len(for_sent)} записей в PhyHub..')
+                    response = requests.post(
                         url=config.receiver_url,
                         headers={'Authorization': f'Token {config.receiver_token}'},
                         json=for_sent,
                         timeout=config.poller_connection_timeout,
                     )
+                    logger.debug(f'PhyHub response: {response.text}')
                 except (RequestException, JSONDecodeError) as err:
-                    logger.error(f'Ошибка отправки:\n{err}')
+                    logger.error(f'Ошибка отправки на сервер:\n{err}')
 
             await asyncio.sleep(30)

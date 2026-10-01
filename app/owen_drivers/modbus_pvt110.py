@@ -3,11 +3,14 @@ import struct
 import time
 
 from app.owen_drivers.base_driver import BaseDriver
-from app.owen_drivers.exeptions import (
+from app.owen_drivers.exceptions import (
     CRCCheckError,
     ModbusProtocolError,
     PacketLenError,
 )
+from app.owen_poller.enums import SensorStatus
+from app.owen_poller.state import SensorRuntimeState
+from app.providers.base_provider import BaseDataProvider
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +21,12 @@ class ModbusPVT110(BaseDriver):
     Осуществляет последовательное чтение регистров температуры и влажности.
     """
 
-    is_cumulative = False
     poll_priority = 1
+    poll_interval = 5.0
+
+    min_success_rate: float = 0.25
+
+    __FAILED_ATTEMPTS: int = 3
 
     # Адреса регистров (согласно конфигуратору)
     __REG_TEMPERATURE: int = 2250  # 0x08CA
@@ -64,14 +71,14 @@ class ModbusPVT110(BaseDriver):
     __KEY_TEMPERATURE: str = 'temperature'
     __KEY_HUMIDITY: str = 'humidity'
 
-    def __init__(self, addr: int, addr_len: int = 8):
+    def __init__(self, addr: int, **kwargs):
         """
         Инициализация драйвера.
 
         :param addr: Сетевой адрес устройства Modbus.
-        :param addr_len: Длина адреса (для совместимости с базовым интерфейсом поллера).
+        :param kwargs: Дополнительные параметры не используются в этом драйвере.
         """
-        self.addr = addr
+        super().__init__(addr, **kwargs)
 
     def _calculate_crc(self, data: bytes) -> int:
         """
@@ -91,11 +98,13 @@ class ModbusPVT110(BaseDriver):
                     crc >>= 1
         return crc
 
-    def _read_register(self, serial_if, register_addr: int) -> float | None:
+    def _read_register(
+        self, provider: BaseDataProvider, register_addr: int
+    ) -> float | None:
         """
         Выполняет низкоуровневый запрос по Modbus RTU для чтения Float 32 (2 регистра).
 
-        :param serial_if: Объект открытого последовательного порта (Serial).
+        :param provider: Поставщик данных.
         :param register_addr: Начальный адрес регистра для чтения.
         :return: Распакованное значение с плавающей точкой или None при ошибке связи.
         """
@@ -109,11 +118,11 @@ class ModbusPVT110(BaseDriver):
         crc = self._calculate_crc(request)
         request += struct.pack(self.__FORMAT_CRC, crc)
 
-        serial_if.reset_input_buffer()
-        serial_if.write(request)
+        provider.clear_buffers()
+        provider.write(request)
         time.sleep(self.__READ_DELAY)
 
-        response = serial_if.read(self.__RESPONSE_EXPECTED_LEN)
+        response = provider.read(self.__RESPONSE_EXPECTED_LEN)
 
         if len(response) == 0:
             raise TimeoutError(f'ПВТ-110 (адрес {self.addr}) не ответил.')
@@ -139,23 +148,23 @@ class ModbusPVT110(BaseDriver):
         return round(value, 2)
 
     def read_parameter(
-        self, serial_if, parameter_hash: bytes = None
+        self, provider: BaseDataProvider, **kwargs
     ) -> dict[str, float] | None:
         """
         Считывает оба параметра с прибора: температуру и влажность.
 
-        :param serial_if: Объект открытого последовательного порта (Serial).
-        :param parameter_hash: Игнорируется, оставлен для совместимости с OwenCI8.
+        :param provider: Поставщик данных.
+        :param kwargs: Не используется в данном драйвере.
         :return: Словарь со значениями температуры и влажности, либо None в случае сбоя.
         """
         try:
-            temperature = self._read_register(serial_if, self.__REG_TEMPERATURE)
+            temperature = self._read_register(provider, self.__REG_TEMPERATURE)
             if temperature is None:
                 return None
 
             time.sleep(self.__READ_DELAY)
 
-            humidity = self._read_register(serial_if, self.__REG_HUMIDITY)
+            humidity = self._read_register(provider, self.__REG_HUMIDITY)
             if humidity is None:
                 return None
 
@@ -164,3 +173,45 @@ class ModbusPVT110(BaseDriver):
         except Exception as e:
             logger.error(f'Modbus PVT110 Error: {e}')
             return None
+
+    def calculate_minute_metric(
+        self, start_val: dict | None, end_val: dict | None
+    ) -> dict | None:
+        """
+        Возвращает последние показания.
+
+        Для термогигрометра минутным итогом является просто последнее
+        зафиксированное значение температуры и влажности.
+        """
+        return end_val
+
+    def calculate_instant_metric(
+        self, curr_val: dict, prev_val: dict, duration_sec: float
+    ) -> dict:
+        """
+        Возвращает текущие значения.
+
+        Для термогигрометра понятие скорости не применимо, поэтому
+        внешним системам всегда отдаются текущие абсолютные показания.
+        """
+        return curr_val
+
+    def get_status(
+        self, metric: dict | None, state: SensorRuntimeState
+    ) -> SensorStatus:
+        """
+        Анализирует работоспособность термогигрометра.
+
+        Переводит в OFFLINE только при достижении кол-ва ошибок, заданных в FAILED_ATTEMPTS.
+        Термогигрометр не имеет состояния STOP.
+        """
+        if state.consecutive_fails >= self.__FAILED_ATTEMPTS:
+            return SensorStatus.OFFLINE
+
+        rate = self.calculate_success_rate(state.attempt_count, state.success_count)
+        if state.attempt_count > 0 and rate < self.min_success_rate:
+            return SensorStatus.UNKNOWN
+
+        if metric is None:
+            return SensorStatus.UNKNOWN
+        return SensorStatus.OK

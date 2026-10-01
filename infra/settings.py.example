@@ -1,7 +1,9 @@
 from typing import Any
 
-from app.owen_counter.owen_ci8 import OwenCI8
+from app.owen_drivers.owen_ci8 import OwenCI8
+from app.owen_drivers.modbus_pvt110 import ModbusPVT110
 
+# Настойки подключения порта
 serial_settings: dict[str, Any] = {
     'port': '/dev/ttyUSB0',
     'baudrate': 9600,
@@ -11,38 +13,29 @@ serial_settings: dict[str, Any] = {
     'timeout': 0.2
 }
 
+# Настройки приборов на чтение
 sensors_settings: list[dict[str, Any]] = [
     {
-        'name': 's10',
-        'addr': 1,
-        'addr_len': 8,
-        'parameter': OwenCI8.DCNT
-    },
-    {
-        'name': 's11',
+        # Пример настройки для прибора СИ8
+        'name': 'dev1_ci8',
+        'driver': OwenCI8,
         'addr': 2,
         'addr_len': 8,
         'parameter': OwenCI8.DCNT
     },
     {
-        'name': 's20',
-        'addr': 3,
-        'addr_len': 8,
-        'parameter': OwenCI8.DCNT
-    },
-    {
-        'name': 's21',
-        'addr': 4,
-        'addr_len': 8,
-        'parameter': OwenCI8.DCNT
-    },
-    # пример объявления заглушки
-    {
-        'name': 'test1',
-        'addr': 0,
-        'addr_len': 0,
-        'parameter': DummyCounter.TEST
-    },
+        # Пример настройки прибора для ПВТ-110
+        'name': 'dev1_pvt',
+        'driver': ModbusPVT110,
+        'addr': 16
+    }
 ]
 
-POLL_DELAY = 0.5
+# Задержка между полным циклом опроса всех устройств
+POLL_DELAY: float = 0.5
+
+# Задержка между опросами каждого прибора в пределах цикла одного опроса
+INTER_SENSOR_DELAY: float = 0.25
+
+# Заглушка для генерации случайных данных, вместо реального чтения по железу
+USE_MOCK_PROVIDER: bool = False
