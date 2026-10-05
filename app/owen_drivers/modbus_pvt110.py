@@ -1,6 +1,7 @@
 import logging
 import struct
 import time
+from typing import Any
 
 from app.owen_drivers.base_driver import BaseDriver
 from app.owen_drivers.exceptions import (
@@ -32,13 +33,23 @@ class ModbusPVT110(BaseDriver):
     __REG_TEMPERATURE: int = 2250  # 0x08CA
     __REG_HUMIDITY: int = 2200  # 0x0898
 
+    __REG_STATUS: int = 1300
+    __REG_REBOOT: int = 1400
+
+    __REBOOT_CMD_VALUE: int = 1
+    __REGS_INT16_COUNT: int = 1
+
     # Настройки протокола Modbus
     __FUNC_READ_HOLDING_REGISTERS: int = 3
-    __REGS_TO_READ: int = 2
-    __RESPONSE_EXPECTED_LEN: int = 9
+    __FUNC_WRITE_SINGLE_REGISTER: int = 6
+    __REGS_FLOAT32_COUNT: int = 2
+
+    __FLOAT32_RESPONSE_EXPECTED_LEN: int = 9
+    __INT32_RESPONSE_EXPECTED_LEN: int = 7
+    __WRITE_SINGLE_RESPONSE_EXPECTED_LEN: int = 8
 
     # Ответ с ошибкой содержит код функции
-    __MODBUS_ERROR_FUNC_CODE: int = 0x83
+    __MODBUS_ERROR_FUNC_CODE: int = 0x80
 
     # Стандартные коды ошибок Modbus
     MODBUS_ERRORS: dict[int, str] = {
@@ -56,9 +67,11 @@ class ModbusPVT110(BaseDriver):
     __FORMAT_REQUEST: str = '>BBHH'
     __FORMAT_CRC: str = '<H'
     __FORMAT_FLOAT: str = '>f'
+    __FORMAT_INT: str = '>H'
 
     # Срезы для парсинга байтовых ответов
-    __PAYLOAD_SLICE: slice = slice(3, 7)
+    __PAYLOAD_FLOAT32_SLICE: slice = slice(3, 7)
+    __PAYLOAD_INT16_SLICE: slice = slice(3, 5)
     __CRC_RECEIVED_SLICE: slice = slice(-2, None)
     __CRC_CALC_DATA_SLICE: slice = slice(0, -2)
     __WORD1_SLICE: slice = slice(0, 2)
@@ -70,6 +83,9 @@ class ModbusPVT110(BaseDriver):
     # Ключи для результирующего словаря
     __KEY_TEMPERATURE: str = 'temperature'
     __KEY_HUMIDITY: str = 'humidity'
+    __KEY_HW_CODE: str = 'hardware_code'
+    __KEY_HW_IS_OK: str = 'is_ok'
+    __KEY_HW_DESC: str = 'description'
 
     def __init__(self, addr: int, **kwargs):
         """
@@ -79,6 +95,52 @@ class ModbusPVT110(BaseDriver):
         :param kwargs: Дополнительные параметры не используются в этом драйвере.
         """
         super().__init__(addr, **kwargs)
+
+    def _execute_modbus_command(
+        self,
+        provider: BaseDataProvider,
+        func_code: int,
+        reg_addr: int,
+        payload: int,
+        expected_len: int,
+    ) -> bytes:
+        """
+        Формирует пакет, отправляет его, читает ответ, проверяя все ошибки протокола.
+
+        :param payload: Для функции 0x03 — количество регистров, для 0x06 — значение для записи.
+        :param expected_len: Ожидаемая длина ответа в байтах.
+        :return: Валидный массив байт ответа (без ошибок).
+        """
+        request = struct.pack(
+            self.__FORMAT_REQUEST, self.addr, func_code, reg_addr, payload
+        )
+        crc = self._calculate_crc(request)
+        request += struct.pack(self.__FORMAT_CRC, crc)
+
+        provider.clear_buffers()
+        provider.write(request)
+        time.sleep(self.__READ_DELAY)
+
+        response = provider.read(expected_len)
+
+        if len(response) == 0:
+            raise TimeoutError(f'ПВТ-110 (адрес {self.addr}) не ответил.')
+
+        if response[1] == (func_code + self.__MODBUS_ERROR_FUNC_CODE):
+            error_code = response[2] if len(response) > 2 else -1
+            error_msg = self.MODBUS_ERRORS.get(error_code, 'Неизвестная ошибка')
+            raise ModbusProtocolError(f'Код {error_code} - {error_msg}')
+
+        if len(response) < expected_len:
+            raise PacketLenError(response)
+
+        received_crc = struct.unpack(
+            self.__FORMAT_CRC, response[self.__CRC_RECEIVED_SLICE]
+        )[0]
+        if received_crc != self._calculate_crc(response[self.__CRC_CALC_DATA_SLICE]):
+            raise CRCCheckError(response)
+
+        return response
 
     def _calculate_crc(self, data: bytes) -> int:
         """
@@ -108,41 +170,18 @@ class ModbusPVT110(BaseDriver):
         :param register_addr: Начальный адрес регистра для чтения.
         :return: Распакованное значение с плавающей точкой или None при ошибке связи.
         """
-        request = struct.pack(
-            self.__FORMAT_REQUEST,
-            self.addr,
-            self.__FUNC_READ_HOLDING_REGISTERS,
-            register_addr,
-            self.__REGS_TO_READ,
+        response = self._execute_modbus_command(
+            provider=provider,
+            func_code=self.__FUNC_READ_HOLDING_REGISTERS,
+            reg_addr=register_addr,
+            payload=self.__REGS_FLOAT32_COUNT,
+            expected_len=self.__FLOAT32_RESPONSE_EXPECTED_LEN,
         )
-        crc = self._calculate_crc(request)
-        request += struct.pack(self.__FORMAT_CRC, crc)
 
-        provider.clear_buffers()
-        provider.write(request)
-        time.sleep(self.__READ_DELAY)
-
-        response = provider.read(self.__RESPONSE_EXPECTED_LEN)
-
-        if len(response) == 0:
-            raise TimeoutError(f'ПВТ-110 (адрес {self.addr}) не ответил.')
-
-        if response[1] == self.__MODBUS_ERROR_FUNC_CODE:
-            error_code = response[2] if len(response) > 2 else -1
-            error_msg = self.MODBUS_ERRORS.get(error_code, 'Неизвестная ошибка')
-            raise ModbusProtocolError(f'Код {error_code} - {error_msg}')
-
-        if len(response) < self.__RESPONSE_EXPECTED_LEN:
-            raise PacketLenError(response)
-
-        received_crc = struct.unpack(
-            self.__FORMAT_CRC, response[self.__CRC_RECEIVED_SLICE]
-        )[0]
-        if received_crc != self._calculate_crc(response[self.__CRC_CALC_DATA_SLICE]):
-            raise CRCCheckError(response)
-
-        payload = response[self.__PAYLOAD_SLICE]
-        cdab_payload = payload[self.__WORD2_SLICE] + payload[self.__WORD1_SLICE]
+        payload_bytes = response[self.__PAYLOAD_FLOAT32_SLICE]
+        cdab_payload = (
+            payload_bytes[self.__WORD2_SLICE] + payload_bytes[self.__WORD1_SLICE]
+        )
         value = struct.unpack(self.__FORMAT_FLOAT, cdab_payload)[0]
 
         return round(value, 2)
@@ -215,3 +254,45 @@ class ModbusPVT110(BaseDriver):
         if metric is None:
             return SensorStatus.UNKNOWN
         return SensorStatus.OK
+
+    def reboot(self, provider: 'BaseDataProvider') -> bool:
+        """Программная перезагрузка ПВТ-110."""
+        try:
+            self._execute_modbus_command(
+                provider=provider,
+                func_code=self.__FUNC_WRITE_SINGLE_REGISTER,
+                reg_addr=self.__REG_REBOOT,
+                payload=self.__REBOOT_CMD_VALUE,
+                expected_len=self.__WRITE_SINGLE_RESPONSE_EXPECTED_LEN,
+            )
+            return True
+        except Exception as e:
+            logger.warning(f'Ошибка отправки команды перезагрузки ПВТ-110: {e}')
+            return False
+
+    def read_device_status(self, provider: 'BaseDataProvider') -> dict[str, Any] | None:
+        """Чтение аппаратного кода ошибки (например, обрыв сенсора внутри ПВТ)."""
+        try:
+            response = self._execute_modbus_command(
+                provider=provider,
+                func_code=self.__FUNC_READ_HOLDING_REGISTERS,
+                reg_addr=self.__REG_STATUS,
+                payload=self.__REGS_INT16_COUNT,
+                expected_len=self.__INT32_RESPONSE_EXPECTED_LEN,
+            )
+
+            status_code = struct.unpack(
+                self.__FORMAT_INT, response[self.__PAYLOAD_INT16_SLICE]
+            )[0]
+            is_ok = status_code == 0
+
+            return {
+                self.__KEY_HW_CODE: status_code,
+                self.__KEY_HW_IS_OK: is_ok,
+                self.__KEY_HW_DESC: 'Норма'
+                if is_ok
+                else f'Ошибка ПВТ код {status_code}',
+            }
+        except Exception as e:
+            logger.warning(f'Ошибка чтения аппаратного статуса ПВТ-110: {e}')
+            return None

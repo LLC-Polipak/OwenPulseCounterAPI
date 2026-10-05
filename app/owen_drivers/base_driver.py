@@ -85,3 +85,23 @@ class BaseDriver(ABC):
         :return: Статус прибора (OK, STOP, OFFLINE, UNKNOWN).
         """
         pass
+
+    @abstractmethod
+    def reboot(self, provider: BaseDataProvider) -> bool:
+        """
+        Отправляет команду на программную перезагрузку физического устройства.
+
+        :param provider: Провайдер связи (COM-порт / Mock)
+        :return: True, если команда успешно принята устройством. По умолчанию False.
+        """
+        pass
+
+    @abstractmethod
+    def read_device_status(self, provider: BaseDataProvider) -> dict[str, Any] | None:
+        """
+        Считывает аппаратный статус или код ошибки с самого устройства.
+
+        :param provider: Провайдер связи (COM-порт / Mock)
+        :return: Словарь с описанием статуса, либо None, если не поддерживается.
+        """
+        pass
