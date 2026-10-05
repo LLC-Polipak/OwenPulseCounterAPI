@@ -21,8 +21,6 @@ class Sensor:
     Обеспечивает абстракцию "Логического датчика".
     """
 
-    reading: SensorReading
-
     def __init__(
         self,
         name: str,

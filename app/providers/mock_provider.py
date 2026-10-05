@@ -31,41 +31,62 @@ class MockDataProvider(BaseDataProvider):
 
     @property
     def name(self) -> str:
+        """Возвращает виртуальное имя порта."""
         return 'Smart-Mock-485'
 
     def connect(self) -> bool:
+        """Имитирует успешное открытие системного порта."""
         self._is_open = True
         return True
 
     def disconnect(self) -> None:
+        """Имитирует закрытие системного порта."""
         self._is_open = False
 
     @property
     def is_connected(self) -> bool:
+        """Показывает текущее состояние виртуального подключения."""
         return self._is_open
 
     def clear_buffers(self) -> None:
+        """Очищает внутренний буфер ответа, имитируя сброс буферов ОС."""
         self._response_buffer = b''
 
     def write(self, data: bytes) -> None:
+        """
+        Перехватывает запись в порт.
+
+        Анализирует паттерн байтов, определяет протокол (Modbus или ОВЕН)
+        и формирует соответствующий ответ во внутренний буфер.
+
+        :param data: Пакет байтов (запрос от драйвера).
+        """
         if not self._is_open:
             raise SerialException('Попытка записи в закрытый Mock-порт')
 
         if random.random() < self.fail_rate:
-            logger.debug('[MOCK] Генерирую случайный сбой (нет ответа).')
+            logger.debug(f'[MOCK {self.name}] Генерирую случайный сбой (обрыв ответа).')
             self._response_buffer = b''
             return
 
         if data.startswith(b'#') and data.endswith(b'\r'):
             self._response_buffer = self._handle_owen_protocol(data)
 
-        elif len(data) == 8 and data[1] == 0x03:
+        elif len(data) == 8 and data[1] in (0x03, 0x06):
             self._response_buffer = self._handle_modbus_protocol(data)
 
         else:
             self._response_buffer = b''
 
     def read(self, size: int) -> bytes:
+        """
+        Имитирует побайтовое чтение из порта ОС.
+
+        Отдает запрошенное количество байт из сформированного ранее буфера ответа.
+
+        :param size: Ожидаемое количество байт для чтения.
+        :return: Байты ответа или пустой `bytes`, если буфер пуст.
+        """
         if not self._is_open:
             raise SerialException('Попытка чтения из закрытого Mock-порта')
 
@@ -74,28 +95,60 @@ class MockDataProvider(BaseDataProvider):
         return chunk
 
     def _handle_modbus_protocol(self, req: bytes) -> bytes:
+        """
+        Распознает регистры и функции Modbus, генерируя флуктуации
+        для температуры и влажности, либо обрабатывает сервисные команды.
+        """
         addr = req[0]
+        func = req[1]
         reg_addr = struct.unpack('>H', req[2:4])[0]
 
-        if reg_addr == 2250:
-            self._pvt_temp += random.uniform(-0.2, 0.2)
-            val = self._pvt_temp
-        elif reg_addr == 2200:
-            self._pvt_hum += random.uniform(-0.5, 0.5)
-            self._pvt_hum = max(0.0, min(100.0, self._pvt_hum))
-            val = self._pvt_hum
-        else:
-            return b''
+        if func == 0x03:
+            if reg_addr == 2250:
+                self._pvt_temp += random.uniform(-0.2, 0.2)
+                return self._pack_modbus_float_response(addr, self._pvt_temp)
 
+            elif reg_addr == 2200:
+                self._pvt_hum += random.uniform(-0.5, 0.5)
+                self._pvt_hum = max(0.0, min(100.0, self._pvt_hum))
+                return self._pack_modbus_float_response(addr, self._pvt_hum)
+
+            elif reg_addr == 1300:
+                hw_status_code = 0 if random.random() > 0.02 else 2
+                if hw_status_code != 0:
+                    logger.warning(
+                        '[MOCK] Генерирую фейковую аппаратную ошибку ПВТ-110!'
+                    )
+
+                resp_no_crc = struct.pack('>BBB', addr, 3, 2) + struct.pack(
+                    '>H', hw_status_code
+                )
+                return resp_no_crc + struct.pack(
+                    '<H', self._calc_modbus_crc(resp_no_crc)
+                )
+
+        elif func == 0x06 and reg_addr == 1400:
+            cmd_val = struct.unpack('>H', req[4:6])[0]
+            if cmd_val == 1:
+                logger.info('[MOCK] ПВТ-110 уходит в программную перезагрузку...')
+                self._pvt_temp = 24.0
+                self._pvt_hum = 45.0
+                return req
+
+        return b''
+
+    def _pack_modbus_float_response(self, addr: int, val: float) -> bytes:
+        """
+        Упаковывает значение Float32 в ответный пакет Modbus
+        с порядком байт CDAB (Стандарт ОВЕН).
+        """
         raw_float = struct.pack('>f', val)
         cdab_float = raw_float[2:4] + raw_float[0:2]
-
         resp_no_crc = struct.pack('>BBB', addr, 3, 4) + cdab_float
-        crc = self._calc_modbus_crc(resp_no_crc)
-
-        return resp_no_crc + struct.pack('<H', crc)
+        return resp_no_crc + struct.pack('<H', self._calc_modbus_crc(resp_no_crc))
 
     def _calc_modbus_crc(self, data: bytes) -> int:
+        """Вычисляет контрольную сумму CRC16 для Modbus."""
         crc = 0xFFFF
         for pos in data:
             crc ^= pos
@@ -108,6 +161,10 @@ class MockDataProvider(BaseDataProvider):
         return crc
 
     def _handle_owen_protocol(self, ascii_req: bytes) -> bytes:
+        """
+        Распознает запросы протокола ОВЕН, инкрементирует виртуальный
+        счетчик деталей и формирует валидный ASCII пакет с BCD-данными.
+        """
         bin_req = self._owen_ascii_to_bin(ascii_req)
         if len(bin_req) < 6:
             return b''
@@ -116,7 +173,6 @@ class MockDataProvider(BaseDataProvider):
         addr_hash[1] &= 0xEF
 
         self._ci8_counter += random.randint(20, 50)
-
         data_block = self._int_to_bcd(self._ci8_counter, length_bytes=4)
 
         resp_bin = addr_hash + data_block
@@ -125,11 +181,16 @@ class MockDataProvider(BaseDataProvider):
         return self._owen_bin_to_ascii(resp_bin)
 
     def _int_to_bcd(self, val: int, length_bytes: int = 4) -> bytes:
-        """Переводит целое число в формат BCD (например 1234 -> b'\\x12\\x34')"""
+        """
+        Переводит целое число в двоично-десятичный формат BCD (DEC_dot0).
+
+        Пример: 1234 превратится в байты 0x12 0x34.
+        """
         s = str(val).zfill(length_bytes * 2)
         return bytes(int(s[i : i + 2], 16) for i in range(0, len(s), 2))
 
     def _calc_owen_crc(self, data: bytes) -> int:
+        """Вычисляет специфичную контрольную сумму CRC16 для протокола ОВЕН."""
         crc = 0x00
         for byte in data:
             for _ in range(8):
@@ -144,6 +205,10 @@ class MockDataProvider(BaseDataProvider):
         return crc
 
     def _owen_ascii_to_bin(self, ascii_data: bytes) -> bytes:
+        """
+        Распаковывает тетрады (ASCII символы G-V) обратно в бинарный вид.
+        Каждые 2 ASCII символа превращаются в 1 байт.
+        """
         bin_packet = bytearray()
         for i in range(1, len(ascii_data) - 1, 2):
             h_nibble = ascii_data[i] - 0x47
@@ -152,6 +217,10 @@ class MockDataProvider(BaseDataProvider):
         return bytes(bin_packet)
 
     def _owen_bin_to_ascii(self, bin_data: bytes) -> bytes:
+        """
+        Оборачивает бинарные данные в ASCII-оболочку ОВЕН.
+        Каждый байт разбивается на 2 тетрады и смещается на 0x47 (символ G).
+        """
         ascii_packet = bytearray(b'#')
         for byte in bin_data:
             ascii_packet.append(((byte & 0xF0) >> 4) + 0x47)

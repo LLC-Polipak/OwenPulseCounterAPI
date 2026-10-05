@@ -5,9 +5,11 @@ router = APIRouter()
 
 @router.get('/')
 async def root():
+    """Информация о сервисе."""
     return {'message': 'Owen Pulse Counter API'}
 
 
 @router.get('/health')
 async def health_check():
+    """Возвращает статус работы сервиса."""
     return {'status': 'healthy', 'message': 'Service is running'}

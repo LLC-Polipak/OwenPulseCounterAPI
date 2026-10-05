@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 async def get_list_sensor_readings(
     work_centers: str, registry: 'DeviceRegistry' = Depends(get_device_registry)
 ):
+    """Получить показания сенсоров по списку рабочих центров."""
     work_centers = work_centers.split(',')
     logger.debug(f'Getting readings for {work_centers}')
     response = registry.get_list_readings(work_centers)
@@ -33,6 +34,7 @@ async def get_list_sensor_readings(
 async def get_sensor_readings(
     name: str, registry: 'DeviceRegistry' = Depends(get_device_registry)
 ):
+    """Получить текущие показания одного сенсора по имени."""
     try:
         logger.debug(f'Getting readings for {name}')
         return registry.get_sensor_readings(name)
@@ -44,6 +46,7 @@ async def get_sensor_readings(
 
 @router.get('/sensors/config/', tags=['Sensors'])
 async def get_sensors_config(poller: 'SensorsPoller' = Depends(get_sensor_poller)):
+    """Получить текущую конфигурацию сенсоров."""
     config_list = []
 
     for s_settings in poller.settings.sensors_settings:
@@ -74,6 +77,7 @@ async def get_sensors_config(poller: 'SensorsPoller' = Depends(get_sensor_poller
 async def test_sensor(
     driver_name: str, addr: int, poller: 'SensorsPoller' = Depends(get_sensor_poller)
 ):
+    """Проверить работоспособность сенсора, отсутствующего в конфигурации."""
     drivers_map = {'ci8': OwenCI8, 'pvt110': ModbusPVT110}
 
     driver_name = driver_name.lower()
@@ -105,3 +109,67 @@ async def test_sensor(
         'value': result.get('reading'),
         'measured_at': result.get('reading_time'),
     }
+
+
+@router.post('/sensors/{name}/reboot', tags=['Device Management'])
+async def api_reboot_device(
+    name: str, poller: 'SensorsPoller' = Depends(get_sensor_poller)
+):
+    """
+    Работоспособность данной ручки не проверена.
+
+    Выполняет аппаратную перезагрузку сенсора, не поддерживает перезагрузку СИ8.
+    """
+    if name not in poller.registry.sensors:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f'Сенсор {name} не найден в реестре.'
+        )
+
+    sensor = poller.registry.sensors[name]
+
+    if not poller.connection.connect():
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            'COM-порт недоступен, невозможно отправить команду.',
+        )
+
+    success = sensor.device.reboot(poller.connection.provider)
+
+    if not success:
+        return {
+            'status': 'error',
+            'message': f'Прибор {name} не ответил, либо не поддерживает перезагрузку.',
+        }
+
+    return {
+        'status': 'ok',
+        'message': f'Команда на перезагрузку отправлена на прибор {name}.',
+    }
+
+
+@router.get('/sensors/{name}/hardware-status', tags=['Device Management'])
+async def api_get_hardware_status(
+    name: str, poller: 'SensorsPoller' = Depends(get_sensor_poller)
+):
+    """
+    Работоспособность данной ручки не проверена.
+
+    Возвращает аппаратный статус устройства. Не поддерживает СИ8.
+    """
+    if name not in poller.registry.sensors:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f'Сенсор {name} не найден.')
+
+    sensor = poller.registry.sensors[name]
+
+    if not poller.connection.connect():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, 'COM-порт недоступен.')
+
+    hw_status = sensor.device.read_device_status(poller.connection.provider)
+
+    if hw_status is None:
+        return {
+            'status': 'not_supported',
+            'description': 'Прибор не поддерживает чтение статуса или не на связи.',
+        }
+
+    return {'status': 'ok', 'hardware_details': hw_status}

@@ -362,3 +362,11 @@ class OwenCI8(BaseDriver):
             return SensorStatus.STOP
 
         return SensorStatus.OK
+
+    def reboot(self, provider: 'BaseDataProvider') -> bool:
+        """Счетчик СИ8 не поддерживает программную перезагрузку по интерфейсу."""
+        return False
+
+    def read_device_status(self, provider: 'BaseDataProvider') -> dict | None:
+        """Счетчик СИ8 не поддерживает детализированный запрос аппаратного статуса."""
+        return None
