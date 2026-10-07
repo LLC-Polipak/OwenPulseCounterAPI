@@ -2,6 +2,8 @@ from typing import Any
 
 from app.owen_drivers.owen_ci8 import OwenCI8
 from app.owen_drivers.modbus_pvt110 import ModbusPVT110
+from app.owen_poller.formatters import CounterFormatter, EnvironmentFormatter
+from app.owen_drivers.watchdog import FrozenValueWatchdog
 
 serial_settings: dict[str, Any] = {
     'port': '/dev/ttyUSB0',
@@ -18,13 +20,17 @@ sensors_settings = [
         'driver': OwenCI8,
         'addr': 2,
         'addr_len': 8,
-        'parameter': OwenCI8.DCNT
+        'parameter': OwenCI8.DCNT,
+        'formatter': CounterFormatter(),
+        'watchdog': None
     },
     {
 
         'name': 'dev1_pvt',
         'driver': ModbusPVT110,
-        'addr': 16
+        'addr': 16,
+        'formatter': EnvironmentFormatter(),
+        'watchdog': FrozenValueWatchdog(threshold=10)
     }
 ]
 

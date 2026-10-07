@@ -5,7 +5,6 @@ import logging
 import requests
 from requests import JSONDecodeError, RequestException
 
-from app.api.common import SensorReading
 from app.api.config import config, configure_logging
 
 configure_logging()
@@ -34,14 +33,11 @@ class PcsPerMinSender:
             for_sent = []
 
             for sensor in self.poller.registry.sensors.values():
-                current_reading: SensorReading = sensor.reading
-
+                current_reading = sensor.reading
                 if current_reading.value is None:
                     continue
 
-                previous_reading: SensorReading | None = self.last_readings.get(
-                    sensor.name
-                )
+                previous_reading = self.last_readings.get(sensor.name)
 
                 if previous_reading is None or previous_reading.value is None:
                     duration = 0.0
@@ -63,13 +59,7 @@ class PcsPerMinSender:
                     duration_sec=duration,
                 )
 
-                payload = {'sensor': sensor.name}
-
-                if isinstance(metric, dict):
-                    payload.update(metric)
-                else:
-                    payload['value'] = metric
-
+                payload = sensor.formatter.format_telemetry(sensor.name, metric)
                 for_sent.append(payload)
 
                 if duration > 0:
@@ -78,13 +68,12 @@ class PcsPerMinSender:
             if for_sent:
                 try:
                     logger.info(f'Отправка {len(for_sent)} записей в PhyHub..')
-                    response = requests.post(
+                    requests.post(
                         url=config.receiver_url,
                         headers={'Authorization': f'Token {config.receiver_token}'},
                         json=for_sent,
                         timeout=config.poller_connection_timeout,
                     )
-                    logger.debug(f'PhyHub response: {response.text}')
                 except (RequestException, JSONDecodeError) as err:
                     logger.error(f'Ошибка отправки на сервер:\n{err}')
 
