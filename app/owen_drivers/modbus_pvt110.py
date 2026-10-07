@@ -23,7 +23,7 @@ class ModbusPVT110(BaseDriver):
     """
 
     poll_priority = 1
-    poll_interval = 5.0
+    poll_interval = 10.0
 
     min_success_rate: float = 0.25
 
@@ -46,10 +46,9 @@ class ModbusPVT110(BaseDriver):
 
     __FLOAT32_RESPONSE_EXPECTED_LEN: int = 9
     __INT32_RESPONSE_EXPECTED_LEN: int = 7
-    __WRITE_SINGLE_RESPONSE_EXPECTED_LEN: int = 8
 
     # Ответ с ошибкой содержит код функции
-    __MODBUS_ERROR_FUNC_CODE: int = 0x80
+    __MODBUS_ERROR_OFFSET: int = 0x80
 
     # Стандартные коды ошибок Modbus
     MODBUS_ERRORS: dict[int, str] = {
@@ -107,9 +106,12 @@ class ModbusPVT110(BaseDriver):
         """
         Формирует пакет, отправляет его, читает ответ, проверяя все ошибки протокола.
 
-        :param payload: Для функции 0x03 — количество регистров, для 0x06 — значение для записи.
-        :param expected_len: Ожидаемая длина ответа в байтах.
-        :return: Валидный массив байт ответа (без ошибок).
+        :param provider: Провайдер связи (COM-порт или Mock).
+        :param func_code: Код функции Modbus (0x03, 0x06 и т.д.).
+        :param reg_addr: Адрес регистра.
+        :param payload: Для функции 0x03 — количество регистров, для 0x06 — значение.
+        :param expected_len: Ожидаемая длина ответа в байтах (0 = не ждать ответа).
+        :return: Валидный массив байт ответа (без ошибок) или пустые байты.
         """
         request = struct.pack(
             self.__FORMAT_REQUEST, self.addr, func_code, reg_addr, payload
@@ -123,10 +125,13 @@ class ModbusPVT110(BaseDriver):
 
         response = provider.read(expected_len)
 
+        if expected_len == 0:
+            return b''
+
         if len(response) == 0:
             raise TimeoutError(f'ПВТ-110 (адрес {self.addr}) не ответил.')
 
-        if response[1] == (func_code + self.__MODBUS_ERROR_FUNC_CODE):
+        if response[1] == (func_code + self.__MODBUS_ERROR_OFFSET):
             error_code = response[2] if len(response) > 2 else -1
             error_msg = self.MODBUS_ERRORS.get(error_code, 'Неизвестная ошибка')
             raise ModbusProtocolError(f'Код {error_code} - {error_msg}')
@@ -256,14 +261,14 @@ class ModbusPVT110(BaseDriver):
         return SensorStatus.OK
 
     def reboot(self, provider: 'BaseDataProvider') -> bool:
-        """Программная перезагрузка ПВТ-110."""
+        """Отправляет команду программной перезагрузки ПВТ-110 (функция 0x06)."""
         try:
             self._execute_modbus_command(
                 provider=provider,
                 func_code=self.__FUNC_WRITE_SINGLE_REGISTER,
                 reg_addr=self.__REG_REBOOT,
                 payload=self.__REBOOT_CMD_VALUE,
-                expected_len=self.__WRITE_SINGLE_RESPONSE_EXPECTED_LEN,
+                expected_len=0,
             )
             return True
         except Exception as e:

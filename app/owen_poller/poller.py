@@ -34,18 +34,25 @@ class SensorsPoller:
 
         for s_settings in settings.sensors_settings:
             device_class = s_settings['driver']
-
             kwargs = {
                 k: v
                 for k, v in s_settings.items()
                 if k not in ('name', 'driver', 'parameter')
             }
 
+            formatter = s_settings.get('formatter')
+            if not formatter:
+                raise ValueError(
+                    f"Отсутствует настройка 'formatter' для сенсора {s_settings['name']}"
+                )
+
             sensor = Sensor(
                 name=s_settings['name'],
                 device=device_class(**kwargs),
-                parameter=s_settings.get('parameter'),
+                formatter=formatter,
                 provider=self.connection.provider,
+                watchdog=s_settings.get('watchdog'),
+                parameter=s_settings.get('parameter'),
             )
             self.registry.add_sensor(sensor)
 

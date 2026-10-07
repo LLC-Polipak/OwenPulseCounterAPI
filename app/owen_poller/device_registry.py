@@ -37,21 +37,23 @@ class DeviceRegistry:
         for_sent = []
         measured_at = datetime.now()
         for work_center in work_centers:
-            response = {
-                'sensor': work_center,
-                'value': None,
-                'measured_at': measured_at,
-                'status': SensorStatus.NOT_FOUND,
-            }
-
             if not (sensor := self.sensors.get(work_center)):
-                for_sent.append(response)
+                for_sent.append(
+                    {
+                        'sensor': work_center,
+                        'status': SensorStatus.NOT_FOUND,
+                        'measured_at': measured_at,
+                    }
+                )
                 continue
 
             current_reading = sensor.reading
             if current_reading.value is None:
-                response['status'] = SensorStatus.OFFLINE
-                for_sent.append(response)
+                for_sent.append(
+                    sensor.formatter.format_instant(
+                        sensor.name, None, SensorStatus.OFFLINE, measured_at
+                    )
+                )
                 continue
 
             previous_reading = self.last_readings.get(sensor.name)
@@ -73,10 +75,11 @@ class DeviceRegistry:
             metric = sensor.device.calculate_instant_metric(
                 current_reading.value, prev_val, duration
             )
+            status = sensor.device.get_status(metric, sensor.state)
 
-            response['value'] = metric
-            response['status'] = sensor.device.get_status(metric, sensor.state)
-
+            response = sensor.formatter.format_instant(
+                sensor.name, metric, status, measured_at
+            )
             for_sent.append(response)
 
             if duration > 0:
@@ -89,31 +92,16 @@ class DeviceRegistry:
         result = []
         for name in sensors_list:
             if name not in self.sensors:
-                result.append(
-                    {
-                        'sensor': name,
-                        'status': SensorStatus.NOT_FOUND,
-                        'value': None,
-                        'measured_at': None,
-                        'changed_at': None,
-                        'success_rate': 0.0,
-                    }
-                )
+                result.append({'sensor': name, 'status': SensorStatus.NOT_FOUND})
                 continue
 
             snapshot = self.sensors[name].state.last_minute_snapshot
             if not snapshot or snapshot.minute is None:
                 continue
 
-            result.append(
-                {
-                    'sensor': name,
-                    'status': snapshot.status,
-                    'value': snapshot.value,
-                    'measured_at': snapshot.minute,
-                    'changed_at': snapshot.last_seen_at,
-                    'success_rate': snapshot.success_rate,
-                    'true_value': self.sensors[name].state.last_value,
-                }
+            response = self.sensors[name].formatter.format_snapshot(
+                name, snapshot, self.sensors[name].state
             )
+            result.append(response)
+
         return result
