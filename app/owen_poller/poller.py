@@ -87,7 +87,7 @@ class SensorsPoller:
         if self.registry.has_address(addr):
             raise DeviceAddressAlreadyExists(addr)
 
-        deserialized_cfg = self.storage._deserialize_item(raw_config)
+        deserialized_cfg = self.storage.deserialize_item(raw_config)
         sensor = self._create_and_register_sensor(deserialized_cfg)
         self.storage.add_sensor_config(raw_config)
 
@@ -175,7 +175,7 @@ class SensorsPoller:
             raise DeviceAddressAlreadyExists(new_addr)
 
         old_sensor = self.registry.sensors[target_name]
-        deserialized_cfg = self.storage._deserialize_item(raw_config)
+        deserialized_cfg = self.storage.deserialize_item(raw_config)
 
         if new_name != target_name:
             self.registry.remove_sensor(target_name)

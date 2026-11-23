@@ -62,11 +62,11 @@ class SensorConfigStorage:
             )
             serialized = [self._serialize_item(item) for item in default_settings]
             self._write_file(serialized)
-            return [self._deserialize_item(item) for item in serialized]
+            return [self.deserialize_item(item) for item in serialized]
 
         logger.info(f'Загрузка конфигурации сенсоров из {self.file_path}')
         raw_data = self._read_file()
-        return [self._deserialize_item(item) for item in raw_data]
+        return [self.deserialize_item(item) for item in raw_data]
 
     def add_sensor_config(self, sensor_cfg: dict[str, Any]) -> None:
         """Добавить новую конфигурацию сенсора в локальный JSON-файл.
@@ -106,6 +106,8 @@ class SensorConfigStorage:
                 if driver_name.lower() in ('ci8', 'owenci8')
                 else 'EnvironmentFormatter'
             )
+        elif isinstance(formatter, str):
+            formatter_name = formatter
         elif isinstance(formatter, type):
             formatter_name = formatter.__name__
         else:
@@ -139,13 +141,21 @@ class SensorConfigStorage:
 
         return res
 
-    def _deserialize_item(self, item: dict[str, Any]) -> dict[str, Any]:
+    def deserialize_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Восстановить Python-объекты из JSON-словаря."""
         driver_key = str(item['driver']).lower()
         driver_cls = DRIVERS_MAP[driver_key]
 
-        fmt_key = str(item['formatter']).lower()
-        formatter_obj = FORMATTERS_MAP[fmt_key]()
+        fmt_key = str(item.get('formatter', '')).lower()
+        if fmt_key in FORMATTERS_MAP:
+            formatter_cls = FORMATTERS_MAP[fmt_key]
+        else:
+            formatter_cls = (
+                CounterFormatter
+                if driver_key in ('ci8', 'owenci8')
+                else EnvironmentFormatter
+            )
+        formatter_obj = formatter_cls()
 
         param = item.get('parameter')
         if isinstance(param, str):
