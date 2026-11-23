@@ -111,9 +111,26 @@ class DeviceRegistry:
 
         return result
 
-    def has_address(self, addr: int) -> bool:
-        """Проверить, зарегистрировано ли уже устройство с указанным адресом."""
-        return any(
-            getattr(sensor.device, 'raw_addr', sensor.device.addr) == addr
-            for sensor in self.sensors.values()
-        )
+    def has_address(self, addr: int, exclude_name: str | None = None) -> bool:
+        """Проверить, зарегистрировано ли уже устройство с указанным адресом.
+
+        Args:
+            addr: Проверяемый сетевой адрес.
+            exclude_name: Имя сенсора, который нужно исключить из проверки (для update).
+
+        Returns:
+            True, если адрес уже занят другим устройством.
+        """
+        for name, sensor in self.sensors.items():
+            if exclude_name and name == exclude_name:
+                continue
+            if getattr(sensor.device, 'raw_addr', sensor.device.addr) == addr:
+                return True
+        return False
+
+    def remove_sensor(self, sensor_name: str) -> None:
+        """Удалить сенсор и его последние показания из реестра."""
+        if sensor_name not in self.sensors:
+            raise DeviceNotFound(sensor_name)
+        del self.sensors[sensor_name]
+        self.last_readings.pop(sensor_name, None)

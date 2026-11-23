@@ -173,3 +173,40 @@ class SensorConfigStorage:
             res['addr_len'] = item['addr_len']
 
         return res
+
+    def update_sensor_config(
+            self, target_name: str, new_sensor_cfg: dict[str, Any]
+    ) -> None:
+        """Обновить конфигурацию существующего сенсора в локальном JSON-файла.
+
+        Args:
+            target_name: Текущее имя сенсора, который нужно обновить.
+            new_sensor_cfg: Словарь с новыми параметрами сенсора.
+        """
+        if not self.file_path.exists():
+            return
+
+        raw_data = self._read_file()
+        serialized_new = self._serialize_item(new_sensor_cfg)
+
+        for idx, item in enumerate(raw_data):
+            if item.get('name') == target_name:
+                raw_data[idx] = serialized_new
+                break
+
+        self._write_file(raw_data)
+
+    def remove_sensor_config(self, target_name: str) -> None:
+        """Удалить конфигурацию сенсора из локального JSON-файла по имени.
+
+        Args:
+            target_name: Имя удаляемого сенсора.
+        """
+        if not self.file_path.exists():
+            return
+
+        raw_data = self._read_file()
+        filtered_data = [
+            item for item in raw_data if item.get('name') != target_name
+        ]
+        self._write_file(filtered_data)

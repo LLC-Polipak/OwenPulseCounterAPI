@@ -44,12 +44,8 @@ class SensorCreateRequest(BaseModel):
     )
 
 
-@router.post('/sensors/', status_code=status.HTTP_201_CREATED, tags=['Sensors'])
-async def add_sensor(
-    payload: SensorCreateRequest,
-    poller: 'SensorsPoller' = Depends(get_sensor_poller),
-):
-    """Добавить новый счетчик/сенсор в список опроса и сохранить локально."""
+def _build_raw_sensor_config(payload: SensorCreateRequest) -> dict:
+    """Сформировать словарь конфигурации сенсора из Pydantic-схемы."""
     raw_config = {
         'name': payload.name,
         'driver': 'OwenCI8' if payload.driver == 'ci8' else 'ModbusPVT110',
@@ -64,6 +60,16 @@ async def add_sensor(
     }
     if payload.driver == 'ci8':
         raw_config['addr_len'] = payload.addr_len
+    return raw_config
+
+
+@router.post('/sensors/', status_code=status.HTTP_201_CREATED, tags=['Sensors'])
+async def add_sensor(
+    payload: SensorCreateRequest,
+    poller: 'SensorsPoller' = Depends(get_sensor_poller),
+):
+    """Добавить новый счетчик/сенсор в список опроса и сохранить локально."""
+    raw_config = _build_raw_sensor_config(payload)
 
     try:
         sensor = poller.register_new_sensor(raw_config)
@@ -79,6 +85,55 @@ async def add_sensor(
     return {
         'status': 'ok',
         'message': f'Устройство {sensor.name} (адрес {payload.addr}) успешно добавлено.',
+    }
+
+
+@router.put('/sensors/{name}', tags=['Sensors'])
+async def update_sensor(
+    name: str,
+    payload: SensorCreateRequest,
+    poller: 'SensorsPoller' = Depends(get_sensor_poller),
+):
+    """Обновить параметры существующего сенсора в списке опроса и JSON-файле."""
+    raw_config = _build_raw_sensor_config(payload)
+
+    try:
+        sensor = poller.update_existing_sensor(name, raw_config)
+    except DeviceNotFound as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(err)
+        ) from None
+    except (DeviceAddressAlreadyExists, DeviceNameAlreadyExists) as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(err)
+        ) from None
+    except (ImproperlyConfiguredError, ValueError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from None
+
+    return {
+        'status': 'ok',
+        'message': f'Устройство {name} успешно обновлено (текущее имя: {sensor.name}).',
+    }
+
+
+@router.delete('/sensors/{name}', tags=['Sensors'])
+async def delete_sensor(
+    name: str,
+    poller: 'SensorsPoller' = Depends(get_sensor_poller),
+):
+    """Удалить сенсор из списка опроса и локального JSON-файла."""
+    try:
+        poller.delete_existing_sensor(name)
+    except DeviceNotFound as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(err)
+        ) from None
+
+    return {
+        'status': 'ok',
+        'message': f'Устройство {name} успешно удалено из списка опроса.',
     }
 
 
