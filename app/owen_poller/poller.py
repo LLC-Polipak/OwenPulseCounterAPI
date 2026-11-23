@@ -11,7 +11,7 @@ from app.owen_poller.connection import ConnectionManager
 from app.owen_poller.device_registry import DeviceRegistry
 from app.owen_poller.exceptions import (
     DeviceAddressAlreadyExists,
-    DeviceNameAlreadyExists,
+    DeviceNameAlreadyExists, DeviceNotFound,
 )
 from app.owen_poller.sensor import Sensor
 from app.owen_poller.storage import SensorConfigStorage
@@ -87,7 +87,7 @@ class SensorsPoller:
         if self.registry.has_address(addr):
             raise DeviceAddressAlreadyExists(addr)
 
-        deserialized_cfg = self.storage._deserialize_item(raw_config)
+        deserialized_cfg = self.storage.deserialize_item(raw_config)
         sensor = self._create_and_register_sensor(deserialized_cfg)
         self.storage.add_sensor_config(raw_config)
 
@@ -149,3 +149,56 @@ class SensorsPoller:
     def stop(self):
         """Остановить цикл поллера."""
         self.is_active = False
+
+    def update_existing_sensor(
+            self, target_name: str, raw_config: dict[str, Any]
+    ) -> Sensor:
+        """Обновить конфигурацию существующего сенсора в реестре и JSON-хранилище.
+
+        Args:
+            target_name: Текущее имя обновляемого сенсора.
+            raw_config: Словарь с новыми параметрами устройства.
+
+        Returns:
+            Обновленный экземпляр Sensor.
+        """
+        if target_name not in self.registry.sensors:
+            raise DeviceNotFound(target_name)
+
+        new_name = raw_config['name']
+        new_addr = raw_config['addr']
+
+        if new_name != target_name and new_name in self.registry.sensors:
+            raise DeviceNameAlreadyExists(new_name)
+
+        if self.registry.has_address(new_addr, exclude_name=target_name):
+            raise DeviceAddressAlreadyExists(new_addr)
+
+        old_sensor = self.registry.sensors[target_name]
+        deserialized_cfg = self.storage.deserialize_item(raw_config)
+
+        if new_name != target_name:
+            self.registry.remove_sensor(target_name)
+
+        new_sensor = self._create_and_register_sensor(deserialized_cfg)
+
+        # Сохраняем накопленное состояние, если тип драйвера не изменился
+        if isinstance(new_sensor.device, old_sensor.device.__class__):
+            new_sensor.reading = old_sensor.reading
+            new_sensor.state = old_sensor.state
+
+        self.storage.update_sensor_config(target_name, raw_config)
+        logger.info(
+            f'Сенсор {target_name} обновлен (новое имя: {new_name}, адрес: {new_addr}).'
+        )
+        return new_sensor
+
+    def delete_existing_sensor(self, target_name: str) -> None:
+        """Удалить сенсор из активного опроса и локального JSON-хранилища.
+
+        Args:
+            target_name: Имя удаляемого сенсора.
+        """
+        self.registry.remove_sensor(target_name)
+        self.storage.remove_sensor_config(target_name)
+        logger.info(f'Сенсор {target_name} удален из списка опроса и хранилища.')
