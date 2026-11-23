@@ -1,3 +1,5 @@
+"""Маршруты API версии 2 для работы с сенсорами."""
+
 import logging
 from typing import TYPE_CHECKING
 
@@ -17,12 +19,10 @@ logger = logging.getLogger(__name__)
 async def get_list_sensor_readings(
     work_centers: str, registry: 'DeviceRegistry' = Depends(get_device_registry)
 ):
-    """
-    Получить полные показания сенсора по списку рабочих центров.
+    """Получить полные показания сенсора по списку рабочих центров.
 
     Возвращает метрику, статус сенсора, текущее значение и процент успешных
     опросов сенсора в течение минуты.
     """
     work_centers = work_centers.split(',')
-    response = registry.get_minute_state(work_centers)
-    return response
+    return registry.get_minute_state(work_centers)

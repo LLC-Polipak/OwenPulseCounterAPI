@@ -1,3 +1,5 @@
+"""Конфигурация приложения и настройка логирования."""
+
 import logging
 from pathlib import Path
 
@@ -6,6 +8,8 @@ from pydantic_settings import BaseSettings
 
 
 class Config(BaseSettings):
+    """Настройки приложения."""
+
     receiver_url: HttpUrl
     receiver_token: str
     poller_active: bool = False
@@ -24,6 +28,7 @@ logging_level = logging.DEBUG if config.debug else logging.INFO
 
 
 def configure_logging(level=logging_level):
+    """Настроить базовую конфигурацию логирования."""
     logging.basicConfig(
         level=level,
         datefmt='%Y-%m-%d %H:%M:%S',
