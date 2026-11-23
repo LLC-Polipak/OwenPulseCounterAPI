@@ -1,3 +1,5 @@
+"""Драйвер для работы с термогигрометром ОВЕН ПВТ-110 по протоколу Modbus RTU."""
+
 import logging
 import struct
 import time
@@ -17,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class ModbusPVT110(BaseDriver):
-    """
-    Драйвер для работы с термогигрометром ОВЕН ПВТ-110 по протоколу Modbus RTU.
+    """Драйвер для работы с термогигрометром ОВЕН ПВТ-110 по протоколу Modbus RTU.
+
     Осуществляет последовательное чтение регистров температуры и влажности.
     """
 
@@ -87,12 +89,6 @@ class ModbusPVT110(BaseDriver):
     __KEY_HW_DESC: str = 'description'
 
     def __init__(self, addr: int, **kwargs):
-        """
-        Инициализация драйвера.
-
-        :param addr: Сетевой адрес устройства Modbus.
-        :param kwargs: Дополнительные параметры не используются в этом драйвере.
-        """
         super().__init__(addr, **kwargs)
 
     def _execute_modbus_command(
@@ -103,15 +99,17 @@ class ModbusPVT110(BaseDriver):
         payload: int,
         expected_len: int,
     ) -> bytes:
-        """
-        Формирует пакет, отправляет его, читает ответ, проверяя все ошибки протокола.
+        """Сформировать пакет, отправить его и прочитать ответ с проверкой ошибок.
 
-        :param provider: Провайдер связи (COM-порт или Mock).
-        :param func_code: Код функции Modbus (0x03, 0x06 и т.д.).
-        :param reg_addr: Адрес регистра.
-        :param payload: Для функции 0x03 — количество регистров, для 0x06 — значение.
-        :param expected_len: Ожидаемая длина ответа в байтах (0 = не ждать ответа).
-        :return: Валидный массив байт ответа (без ошибок) или пустые байты.
+        Args:
+            provider: Провайдер связи (COM-порт или Mock).
+            func_code: Код функции Modbus (0x03, 0x06 и т.д.).
+            reg_addr: Адрес регистра.
+            payload: Для функции 0x03 — количество регистров, для 0x06 — значение.
+            expected_len: Ожидаемая длина ответа в байтах (0 = не ждать ответа).
+
+        Returns:
+            Валидный массив байт ответа (без ошибок) или пустые байты.
         """
         request = struct.pack(
             self.__FORMAT_REQUEST, self.addr, func_code, reg_addr, payload
@@ -148,11 +146,13 @@ class ModbusPVT110(BaseDriver):
         return response
 
     def _calculate_crc(self, data: bytes) -> int:
-        """
-        Рассчитывает контрольную сумму CRC16 для протокола Modbus RTU.
+        """Рассчитать контрольную сумму CRC16 для протокола Modbus RTU.
 
-        :param data: Пакет байтов для расчета.
-        :return: Вычисленное значение CRC.
+        Args:
+            data: Пакет байтов для расчета.
+
+        Returns:
+            Вычисленное значение CRC.
         """
         crc = self.__CRC_INIT
         for pos in data:
@@ -168,12 +168,14 @@ class ModbusPVT110(BaseDriver):
     def _read_register(
         self, provider: BaseDataProvider, register_addr: int
     ) -> float | None:
-        """
-        Выполняет низкоуровневый запрос по Modbus RTU для чтения Float 32 (2 регистра).
+        """Выполнить низкоуровневый запрос по Modbus RTU для чтения Float 32.
 
-        :param provider: Поставщик данных.
-        :param register_addr: Начальный адрес регистра для чтения.
-        :return: Распакованное значение с плавающей точкой или None при ошибке связи.
+        Args:
+            provider: Поставщик данных.
+            register_addr: Начальный адрес регистра для чтения.
+
+        Returns:
+            Распакованное значение с плавающей точкой или None при ошибке связи.
         """
         response = self._execute_modbus_command(
             provider=provider,
@@ -187,19 +189,19 @@ class ModbusPVT110(BaseDriver):
         cdab_payload = (
             payload_bytes[self.__WORD2_SLICE] + payload_bytes[self.__WORD1_SLICE]
         )
-        value = struct.unpack(self.__FORMAT_FLOAT, cdab_payload)[0]
-
-        return round(value, 2)
+        return round(struct.unpack(self.__FORMAT_FLOAT, cdab_payload)[0], 2)
 
     def read_parameter(
         self, provider: BaseDataProvider, **kwargs
     ) -> dict[str, float] | None:
-        """
-        Считывает оба параметра с прибора: температуру и влажность.
+        """Считать оба параметра с прибора: температуру и влажность.
 
-        :param provider: Поставщик данных.
-        :param kwargs: Не используется в данном драйвере.
-        :return: Словарь со значениями температуры и влажности, либо None в случае сбоя.
+        Args:
+            provider: Поставщик данных.
+            **kwargs: Не используется в данном драйвере.
+
+        Returns:
+            Словарь со значениями температуры и влажности, либо None в случае сбоя.
         """
         try:
             temperature = self._read_register(provider, self.__REG_TEMPERATURE)
@@ -221,8 +223,7 @@ class ModbusPVT110(BaseDriver):
     def calculate_minute_metric(
         self, start_val: dict | None, end_val: dict | None
     ) -> dict | None:
-        """
-        Возвращает последние показания.
+        """Вернуть последние показания.
 
         Для термогигрометра минутным итогом является просто последнее
         зафиксированное значение температуры и влажности.
@@ -232,8 +233,7 @@ class ModbusPVT110(BaseDriver):
     def calculate_instant_metric(
         self, curr_val: dict, prev_val: dict, duration_sec: float
     ) -> dict:
-        """
-        Возвращает текущие значения.
+        """Вернуть текущие значения.
 
         Для термогигрометра понятие скорости не применимо, поэтому
         внешним системам всегда отдаются текущие абсолютные показания.
@@ -243,11 +243,10 @@ class ModbusPVT110(BaseDriver):
     def get_status(
         self, metric: dict | None, state: SensorRuntimeState
     ) -> SensorStatus:
-        """
-        Анализирует работоспособность термогигрометра.
+        """Проанализировать работоспособность термогигрометра.
 
-        Переводит в OFFLINE только при достижении кол-ва ошибок, заданных в FAILED_ATTEMPTS.
-        Термогигрометр не имеет состояния STOP.
+        Переводит в OFFLINE только при достижении кол-ва ошибок, заданных
+        в FAILED_ATTEMPTS. Термогигрометр не имеет состояния STOP.
         """
         if state.consecutive_fails >= self.__FAILED_ATTEMPTS:
             return SensorStatus.OFFLINE
@@ -261,7 +260,7 @@ class ModbusPVT110(BaseDriver):
         return SensorStatus.OK
 
     def reboot(self, provider: 'BaseDataProvider') -> bool:
-        """Отправляет команду программной перезагрузки ПВТ-110 (функция 0x06)."""
+        """Отправить команду программной перезагрузки ПВТ-110 (функция 0x06)."""
         try:
             self._execute_modbus_command(
                 provider=provider,
@@ -276,7 +275,7 @@ class ModbusPVT110(BaseDriver):
             return False
 
     def read_device_status(self, provider: 'BaseDataProvider') -> dict[str, Any] | None:
-        """Чтение аппаратного кода ошибки (например, обрыв сенсора внутри ПВТ)."""
+        """Прочитать аппаратный код ошибки (например, обрыв сенсора внутри ПВТ)."""
         try:
             response = self._execute_modbus_command(
                 provider=provider,
