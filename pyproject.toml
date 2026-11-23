@@ -14,8 +14,23 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    "D104", # Magic methods are self-describing.
+    "D105", # Magic methods are self-describing.
+    "D106", # Nested classes are framework configuration such as Django Meta.
+    "D107", # Constructor arguments are described by the class and signature.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "RUF043",
+    "RUF059",
+    "RUF012",
+    "RUF009",
+    "T201",
+]
 select = [
+    "A", # flake8-builtins
     "E", # pycodestyle
     "F", # Pyflakes
     "UP", # pyupgrade
@@ -23,7 +38,20 @@ select = [
     "SIM", # flake8-simplify
     "I", # isort
     "C", # flake8-comprehensions
+    "D", # pydocstyle
+    "LOG", # flake8-logging
+    "PIE", # flake8-pie
+    "RET", # flake8-return
+    "RUF",
+    "S", # flake8-bandit
+    "T100", # flake8-debugger
+    "T20",
+    "W", # pycodestyle warnings
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+ignore-var-parameters = true
 
 [tool.ruff.format]
 quote-style = "single"
@@ -33,6 +61,7 @@ line-ending = "lf"
 [tool.ruff.lint.per-file-ignores]
 "backend/Tech/settings/*.py" = ["F403", "F405"]
 "app/api/handlers/**.py" = ["B008"]
+"**/tests*.py" = ["S101"]
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"

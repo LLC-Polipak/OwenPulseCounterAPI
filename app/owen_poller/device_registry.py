@@ -1,3 +1,5 @@
+"""Реестр устройств для хранения, сортировки сенсоров и подготовки данных."""
+
 import copy
 import logging
 from datetime import datetime
@@ -12,28 +14,31 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceRegistry:
-    """Реестр устройств. Хранит, сортирует сенсоры и подготавливает данные для API."""
+    """Реестр устройств.
+
+    Хранит, сортирует сенсоры и подготавливает данные для API.
+    """
 
     def __init__(self):
         self.sensors: dict[str, Sensor] = {}
         self.last_readings: dict[str, SensorReading] = {}
 
     def add_sensor(self, sensor: Sensor) -> None:
-        """Добавляет сенсор в реестр."""
+        """Добавить сенсор в реестр."""
         self.sensors[sensor.name] = sensor
 
     def get_sensor_readings(self, sensor_name: str) -> dict[str, Any]:
-        """Возвращает сырые показания одного логического сенсора."""
+        """Вернуть сырые показания одного логического сенсора."""
         if sensor_name not in self.sensors:
             raise DeviceNotFound(sensor_name)
         return self.sensors[sensor_name].get()
 
     def get_sorted_sensors(self) -> list[Sensor]:
-        """Возвращает список сенсоров, отсортированный по их приоритету (poll_priority)."""
+        """Вернуть список сенсоров, отсортированный по их приоритету (poll_priority)."""
         return sorted(self.sensors.values(), key=lambda s: s.device.poll_priority)
 
     def get_list_readings(self, work_centers: list[str]) -> list[dict[str, Any]]:
-        """Бизнес-логика формирования ответов для внешнего API (с расчетом скорости)."""
+        """Сформировать ответы для внешнего API (с расчетом скорости)."""
         for_sent = []
         measured_at = datetime.now()
         for work_center in work_centers:
@@ -88,7 +93,7 @@ class DeviceRegistry:
         return for_sent
 
     def get_minute_state(self, sensors_list: list[str]) -> list[dict]:
-        """Формирует отчет о минутном состоянии сенсоров."""
+        """Сформировать отчет о минутном состоянии сенсоров."""
         result = []
         for name in sensors_list:
             if name not in self.sensors:

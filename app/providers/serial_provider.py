@@ -1,3 +1,5 @@
+"""Поставщик данных для работы с физическим интерфейсом RS-485 через COM-порт."""
+
 import logging
 from datetime import datetime
 
@@ -20,9 +22,11 @@ class SerialDataProvider(BaseDataProvider):
 
     @property
     def name(self) -> str:
+        """Вернуть имя COM-порта."""
         return self._serial.port or 'Unknown_COM'
 
     def connect(self) -> bool:
+        """Открыть соединение с COM-портом с учетом интервала переподключения."""
         if self._serial and self._serial.is_open:
             return True
 
@@ -54,21 +58,26 @@ class SerialDataProvider(BaseDataProvider):
             return False
 
     def disconnect(self) -> None:
+        """Закрыть соединение с COM-портом."""
         if self._serial.is_open:
             self._serial.close()
             self._last_attempt_ts = datetime.now()
 
     @property
     def is_connected(self) -> bool:
+        """Проверить, открыт ли COM-порт."""
         return self._serial.is_open
 
     def clear_buffers(self) -> None:
+        """Сбросить входной и выходной буферы COM-порта."""
         if self.is_connected:
             self._serial.reset_input_buffer()
             self._serial.reset_output_buffer()
 
     def write(self, data: bytes) -> None:
+        """Отправить байты в COM-порт."""
         self._serial.write(data)
 
     def read(self, size: int) -> bytes:
+        """Прочитать заданное количество байт из COM-порта."""
         return self._serial.read(size)

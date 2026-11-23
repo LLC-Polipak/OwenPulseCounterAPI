@@ -1,6 +1,10 @@
+"""Модульные тесты для драйвера счетчика импульсов ОВЕН СИ8."""
+
 import unittest
 from collections import namedtuple
 from datetime import timedelta
+
+import pytest
 
 from app.owen_drivers.exceptions import (
     BCDValueError,
@@ -13,23 +17,22 @@ from .owen_ci8 import DataConverters, OwenCI8
 
 
 class TestOwenCounter(unittest.TestCase):
+    """Тесты основного класса драйвера OwenCI8."""
+
     def test_init_with_invalid_addr_len(self):
-        """Тестируем конструктор с невалидными значениями addr_len."""
+        """Протестировать конструктор с невалидными значениями addr_len."""
         valid_values = (8, 11)
         for no_valid_value in range(-1, 33):
             if no_valid_value in valid_values:
                 continue
             with (
                 self.subTest(addr_len=no_valid_value),
-                self.assertRaises(
-                    ImproperlyConfiguredError,
-                    msg='Конструктор не поднимает исключение!',
-                ),
+                pytest.raises(ImproperlyConfiguredError),
             ):
                 OwenCI8(addr=0, addr_len=no_valid_value)
 
     def test_init_with_invalid_addr(self):
-        """Тестируем конструктор с невалидными значениями addr."""
+        """Протестировать конструктор с невалидными значениями addr."""
         Fixture = namedtuple('Fixture', ['addr', 'addr_len'])
         fixtures = [
             Fixture(addr=-1, addr_len=8),
@@ -43,15 +46,12 @@ class TestOwenCounter(unittest.TestCase):
                     addr=fixture.addr,
                     addr_len=fixture.addr_len,
                 ),
-                self.assertRaises(
-                    ImproperlyConfiguredError,
-                    msg='Конструктор не поднимает исключение!',
-                ),
+                pytest.raises(ImproperlyConfiguredError),
             ):
                 OwenCI8(addr=fixture.addr, addr_len=fixture.addr_len)
 
     def test_init_addr_translation(self):
-        """Тестируем трансляцию addr конструктором."""
+        """Протестировать трансляцию addr конструктором."""
         Fixture = namedtuple('Fixture', ['addr', 'addr_len', 'addr_translated'])
         fixtures = [
             Fixture(addr=0x00, addr_len=8, addr_translated=b'\x00\x00'),
@@ -68,14 +68,12 @@ class TestOwenCounter(unittest.TestCase):
                 addr_len=fixture.addr_len,
                 addr_translated=fixture.addr_translated,
             ):
-                self.assertEqual(
-                    fixture.addr_translated,
-                    instance.addr,
-                    'Неверное значение self.addr.',
+                assert fixture.addr_translated == instance.addr, (
+                    'Неверное значение self.addr.'
                 )
 
     def test_calc_owen_crc(self):
-        """Тестируем правильность расчета CRC."""
+        """Протестировать правильность расчета CRC."""
         Fixture = namedtuple('Fixture', ['data', 'crc'])
         fixtures = [
             Fixture(data=b'', crc=b'\x00\x00'),
@@ -89,10 +87,10 @@ class TestOwenCounter(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(data=fixture.data):
                 call = OwenCI8(addr=0, addr_len=8).calc_owen_crc(fixture.data)
-                self.assertEqual(fixture.crc, call, msg='Неверный CRC!')
+                assert fixture.crc == call, 'Неверный CRC!'
 
     def test_get_command_packet(self):
-        """Тестируем правильность формирования пакета команды."""
+        """Протестировать правильность формирования пакета команды."""
         Fixture = namedtuple('Fixture', ['addr', 'addr_len', 'data', 'expected_packet'])
         fixtures = [
             # запрос DCNT
@@ -145,27 +143,22 @@ class TestOwenCounter(unittest.TestCase):
                 call = OwenCI8(
                     addr=fixture.addr, addr_len=fixture.addr_len
                 ).get_command_packet(parameter_hash=fixture.data)
-                self.assertEqual(
-                    fixture.expected_packet, call, 'Сформирован неверный пакет!'
-                )
+                assert fixture.expected_packet == call, 'Сформирован неверный пакет!'
 
     def test_get_command_packet_with_invalid_parameter_len(self):
-        """Тестируем поднятие ValueError, когда len(parameter) != 2."""
+        """Протестировать поднятие ValueError, когда len(parameter) != 2."""
         invalid_parameters = [b'', b'\x00', b'abc', b'aaaaaaaa']
         for invalid_parameter in invalid_parameters:
             with (
                 self.subTest(parameter=invalid_parameter),
-                self.assertRaises(
-                    ValueError,
-                    msg='Исключение ValueError не поднято:',
-                ),
+                pytest.raises(ValueError),
             ):
                 OwenCI8(addr=1, addr_len=8).get_command_packet(
-                    parameter=invalid_parameter,
+                    parameter_hash=invalid_parameter,
                 )
 
     def test_bin_to_ascii(self):
-        """Тестируем преобразование двоичного пакета в ASCII пакет."""
+        """Протестировать преобразование двоичного пакета в ASCII пакет."""
         Fixture = namedtuple('Fixture', ['bin', 'ascii'])
         fixtures = [
             Fixture(bin=b'', ascii=b'\x23\x0d'),
@@ -178,12 +171,10 @@ class TestOwenCounter(unittest.TestCase):
                 call = OwenCI8(addr=1, addr_len=8).bin_to_ascii(
                     data=bytearray(fixture.bin)
                 )
-                self.assertEqual(
-                    fixture.ascii, call, 'Bin пакет неверно преобразован в ASCII!'
-                )
+                assert fixture.ascii == call, 'Bin пакет неверно преобразован в ASCII!'
 
     def test_ascii_to_bin(self):
-        """Тестируем преобразование валидного ASCII пакета в двоичный."""
+        """Протестировать преобразование валидного ASCII пакета в двоичный."""
         Fixture = namedtuple('Fixture', ['ascii', 'bin'])
         fixtures = [
             Fixture(
@@ -201,10 +192,10 @@ class TestOwenCounter(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(data=fixture.bin):
                 call = OwenCI8(addr=1, addr_len=8).ascii_to_bin(data=fixture.ascii)
-                self.assertEqual(fixture.bin, call, 'ASCII пакет неверно распакован!')
+                assert fixture.bin == call, 'ASCII пакет неверно распакован!'
 
     def test_ascii_to_bin_rise_exception_with_invalid_packet_header(self):
-        """Тестируем поднятие исключения, при невалидном заголовке пакета."""
+        """Протестировать поднятие исключения при невалидном заголовке пакета."""
         fixtures = [
             b'GGHIJKLMNOPQRSTUV\r',
             b'$GHIJKLMNOPQRSTUV\r',
@@ -213,15 +204,12 @@ class TestOwenCounter(unittest.TestCase):
         for fixture in fixtures:
             with (
                 self.subTest(data=fixture),
-                self.assertRaises(
-                    PacketHeaderError,
-                    msg='Исключение не поднято!',
-                ),
+                pytest.raises(PacketHeaderError),
             ):
                 OwenCI8(addr=1, addr_len=8).ascii_to_bin(data=fixture)
 
     def test_ascii_to_bin_rise_exception_with_invalid_packet_footer(self):
-        """Тестируем поднятие исключения, при невалидном окончании пакета."""
+        """Протестировать поднятие исключения при невалидном окончании пакета."""
         fixtures = [
             b'#GHIJKLMNOPQRSTUV\n',
             b'#GHIJKLMNOPQRSTUVG',
@@ -230,15 +218,12 @@ class TestOwenCounter(unittest.TestCase):
         for fixture in fixtures:
             with (
                 self.subTest(data=fixture),
-                self.assertRaises(
-                    PacketHeaderError,
-                    msg='Исключение не поднято!',
-                ),
+                pytest.raises(PacketHeaderError),
             ):
                 OwenCI8(addr=1, addr_len=8).ascii_to_bin(data=fixture)
 
     def test_ascii_to_bin_rise_exception_with_invalid_packet_body(self):
-        """Тестируем поднятие исключения, при невалидном теле пакета."""
+        """Протестировать поднятие исключения при невалидном теле пакета."""
         fixtures = [
             b'#GGGGGGGGGGH\r',
             b'#GGGGGGGGGF\r',
@@ -249,15 +234,12 @@ class TestOwenCounter(unittest.TestCase):
         for fixture in fixtures:
             with (
                 self.subTest(data=fixture),
-                self.assertRaises(
-                    PacketDecodeError,
-                    msg='Исключение не поднято!',
-                ),
+                pytest.raises(PacketDecodeError),
             ):
                 OwenCI8(addr=1, addr_len=8).ascii_to_bin(data=fixture)
 
     def test_check_bin_packet(self):
-        """Тестируем возврат корректного блока данных с валидными пакетами."""
+        """Протестировать возврат корректного блока данных с валидными пакетами."""
         Fixture = namedtuple(
             'Fixture', ['addr', 'addr_len', 'packet', 'hash', 'data_block']
         )
@@ -306,12 +288,14 @@ class TestOwenCounter(unittest.TestCase):
                 ).check_bin_packet(
                     data=bytearray(fixture.packet), parameter_hash=fixture.hash
                 )
-                self.assertEqual(fixture.data_block, call)
+                assert fixture.data_block == call
 
 
 class TestDataConverters(unittest.TestCase):
+    """Тесты конвертеров форматов данных ОВЕН."""
+
     def test_bcd_to_int_with_valid_data(self):
-        """Тестируем преобразование BCD -> int."""
+        """Протестировать преобразование BCD -> int."""
         Fixture = namedtuple('Fixture', ['data', 'expected_value'])
         fixtures = [
             Fixture(data=b'\x00', expected_value=0),
@@ -328,25 +312,20 @@ class TestDataConverters(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(data=fixture.data):
                 call = DataConverters.bcd_to_int(data=fixture.data)
-                self.assertEqual(
-                    fixture.expected_value, call, 'Значение преобразовано неверно!'
-                )
+                assert fixture.expected_value == call, 'Значение преобразовано неверно!'
 
     def test_bcd_to_int_rise_exception_on_invalid_dat(self):
-        """Поднятие исключения при получении недопустимых значений."""
+        """Протестировать поднятие исключения при получении недопустимых значений."""
         invalid_values = [b'', b'\x0a', b'\xa0', b'\xaa', b'\xb1', b'\xff']
         for invalid_value in invalid_values:
             with (
                 self.subTest(data=invalid_value),
-                self.assertRaises(
-                    BCDValueError,
-                    msg='Исключение не поднято!',
-                ),
+                pytest.raises(BCDValueError),
             ):
                 DataConverters.bcd_to_int(data=invalid_value)
 
     def test_clk_to_timedelta_with_valid_data(self):
-        """Тестируем преобразование валидных данных."""
+        """Протестировать преобразование валидных данных времени."""
         Fixture = namedtuple('Fixture', ['data', 'expected_value'])
         fixtures = [
             Fixture(data=b'\x00\x00\x00\x00\x00\x00\x40', expected_value=timedelta()),
@@ -369,7 +348,7 @@ class TestDataConverters(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(data=fixture.data):
                 call = DataConverters.clk_to_timedelta(data=fixture.data)
-                self.assertEqual(fixture.expected_value, call)
+                assert fixture.expected_value == call
 
 
 if __name__ == '__main__':

@@ -1,3 +1,5 @@
+"""Абстрактный базовый класс для поставщиков данных (провайдеров связи)."""
+
 from abc import ABC, abstractmethod
 
 
@@ -7,36 +9,29 @@ class BaseDataProvider(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Возвращает имя подключения (например, 'COM1' или 'Mock-1')."""
-        pass
+        """Вернуть имя подключения (например, 'COM1' или 'Mock-1')."""
 
     @abstractmethod
     def connect(self) -> bool:
-        """Открывает соединение."""
-        pass
+        """Открыть соединение."""
 
     @abstractmethod
     def disconnect(self) -> None:
-        """Закрывает соединение."""
-        pass
+        """Закрыть соединение."""
 
     @property
     @abstractmethod
     def is_connected(self) -> bool:
-        """Проверяет, активно ли соединение."""
-        pass
+        """Проверить, активно ли соединение."""
 
     @abstractmethod
     def clear_buffers(self) -> None:
-        """Очищает входные и выходные буферы."""
-        pass
+        """Очистить входные и выходные буферы."""
 
     @abstractmethod
     def write(self, data: bytes) -> None:
-        """Отправляет данные в канал."""
-        pass
+        """Отправить данные в канал."""
 
     @abstractmethod
     def read(self, size: int) -> bytes:
-        """Читает заданное количество байт из канала."""
-        pass
+        """Прочитать заданное количество байт из канала."""

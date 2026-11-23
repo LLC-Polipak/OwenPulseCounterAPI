@@ -1,3 +1,5 @@
+"""Маршруты API версии 1 для работы с сенсорами."""
+
 import logging
 from typing import TYPE_CHECKING
 
@@ -115,7 +117,7 @@ async def test_sensor(
 async def api_reboot_device(
     name: str, poller: 'SensorsPoller' = Depends(get_sensor_poller)
 ):
-    """Выполняет аппаратную перезагрузку сенсора, не поддерживает перезагрузку СИ8."""
+    """Выполнить аппаратную перезагрузку сенсора (не поддерживает СИ8)."""
     if name not in poller.registry.sensors:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f'Сенсор {name} не найден в реестре.'
@@ -147,7 +149,7 @@ async def api_reboot_device(
 async def api_get_hardware_status(
     name: str, poller: 'SensorsPoller' = Depends(get_sensor_poller)
 ):
-    """Возвращает аппаратный статус устройства, не поддерживает просмотр статуса СИ8."""
+    """Вернуть аппаратный статус устройства (не поддерживает СИ8)."""
     if name not in poller.registry.sensors:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f'Сенсор {name} не найден.')
 

@@ -1,3 +1,5 @@
+"""Модель логического датчика, объединяющая драйвер, провайдер и состояние."""
+
 import logging
 from datetime import datetime
 from typing import Any
@@ -17,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class Sensor:
-    """
-    Класс-обертка, связывающий физический драйвер (BaseDriver),
-    порт связи (Serial) и хранилище результатов (SensorReading).
-    Обеспечивает абстракцию "Логического датчика".
+    """Класс-обертка, обеспечивающий абстракцию «Логического датчика».
+
+    Связывает физический драйвер (BaseDriver), порт связи (Serial)
+    и хранилище результатов (SensorReading).
     """
 
     def __init__(
@@ -32,14 +34,6 @@ class Sensor:
         watchdog: FrozenValueWatchdog | None = None,
         parameter: Any = None,
     ):
-        """
-        :param name: Логическое имя сенсора в системе.
-        :param device: Инициализированный объект драйвера (наследник BaseDriver).
-        :param parameter: Параметр для чтения (хеш, регистр и т.д.).
-        :param provider: Поставщик данных.
-        :param formatter: Форматтер данных.
-        :param watchdog: Наблюдатель за заморозкой значений приборов.
-        """
         self.name = name
         self.device = device
         self.parameter = parameter
@@ -50,15 +44,16 @@ class Sensor:
         self.state = SensorRuntimeState()
 
     def check_minute_boundary(self, now: datetime) -> None:
-        """Проверяет смену минуты и дает команду на формирование минутного снимка."""
+        """Проверить смену минуты и дать команду на формирование минутного снимка."""
         self.state.check_minute_boundary(now, self.device)
 
     def update(self) -> bool:
-        """
-        Выполняет физический запрос к оборудованию.
+        """Выполнить физический запрос к оборудованию.
+
         При успешном ответе обновляет значения начала и конца минуты в state.
 
-        :return: True если опрос прошел успешно, False при логических ошибках.
+        Returns:
+            True, если опрос прошел успешно, False при логических ошибках.
         """
         try:
             val = self.device.read_parameter(self.provider, parametr=self.parameter)
@@ -89,7 +84,7 @@ class Sensor:
             return False
 
     def get(self) -> dict[str, Any]:
-        """Возвращает словарь с текущими сохраненными показаниями."""
+        """Вернуть словарь с текущими сохраненными показаниями."""
         return {
             'name': self.name,
             'reading': self.reading.value,

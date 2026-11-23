@@ -1,3 +1,5 @@
+"""Форматтеры для подготовки данных сенсоров к отправке во внешние API."""
+
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
@@ -7,8 +9,8 @@ from app.owen_poller.state import SensorMinuteSnapshot, SensorRuntimeState
 
 
 class BaseFormatter(ABC):
-    """
-    Абстрактный интерфейс для форматирования данных сенсора.
+    """Абстрактный интерфейс для форматирования данных сенсора.
+
     Обеспечивает разделение логики работы с оборудованием (Драйвер)
     и логики представления данных для внешних API (Форматтер).
     """
@@ -17,46 +19,49 @@ class BaseFormatter(ABC):
     def format_instant(
         self, name: str, metric: Any, status: SensorStatus, measured_at: datetime
     ) -> dict:
-        """
-        Форматирует мгновенный ответ для обработки запросов к API в реальном времени.
+        """Сформировать мгновенный ответ для обработки запросов к API.
 
-        :param name: Имя сенсора.
-        :param metric: Вычисленная метрика (скорость, абсолютное значение или словарь).
-        :param status: Логический статус сенсора.
-        :param measured_at: Временная метка вычисления.
-        :return: Словарь, готовый к JSON-сериализации.
+        Args:
+            name: Имя сенсора.
+            metric: Вычисленная метрика (скорость, абсолютное значение или словарь).
+            status: Логический статус сенсора.
+            measured_at: Временная метка вычисления.
+
+        Returns:
+            Словарь, готовый к JSON-сериализации.
         """
-        pass
 
     @abstractmethod
     def format_snapshot(
         self, name: str, snapshot: SensorMinuteSnapshot, state: SensorRuntimeState
     ) -> dict:
-        """
-        Форматирует минутный снимок (Snapshot) состояния сенсора.
+        """Сформировать минутный снимок (Snapshot) состояния сенсора.
 
-        :param name: Имя сенсора.
-        :param snapshot: Зафиксированный минутный снимок.
-        :param state: Текущее runtime-состояние (используется для извлечения абсолютных значений).
-        :return: Словарь с минутным отчетом.
+        Args:
+            name: Имя сенсора.
+            snapshot: Зафиксированный минутный снимок.
+            state: Текущее runtime-состояние.
+
+        Returns:
+            Словарь с минутным отчетом.
         """
-        pass
 
     @abstractmethod
     def format_telemetry(self, name: str, metric: Any) -> dict:
-        """
-        Форматирует компактную полезную нагрузку (payload) для отправки в фоновом режиме.
+        """Сформировать компактную полезную нагрузку для отправки в фоновом режиме.
 
-        :param name: Имя сенсора.
-        :param metric: Вычисленная метрика (скорость, абсолютное значение или словарь).
-        :return: Компактный словарь только с необходимыми метриками.
+        Args:
+            name: Имя сенсора.
+            metric: Вычисленная метрика (скорость, абсолютное значение или словарь).
+
+        Returns:
+            Компактный словарь только с необходимыми метриками.
         """
-        pass
 
 
 class CounterFormatter(BaseFormatter):
-    """
-    Форматтер для накопительных счетчиков (например, ОВЕН СИ8).
+    """Форматтер для накопительных счетчиков (например, ОВЕН СИ8).
+
     Возвращает данные в виде одного ключа 'value' и передает
     абсолютные значения счетчика (true_value) в минутных отчетах.
     """
@@ -64,6 +69,7 @@ class CounterFormatter(BaseFormatter):
     def format_instant(
         self, name: str, metric: float, status: SensorStatus, measured_at: datetime
     ) -> dict:
+        """Сформировать мгновенный ответ для счетчика."""
         return {
             'sensor': name,
             'value': metric,
@@ -74,6 +80,7 @@ class CounterFormatter(BaseFormatter):
     def format_snapshot(
         self, name: str, snapshot: SensorMinuteSnapshot, state: SensorRuntimeState
     ) -> dict:
+        """Сформировать минутный снимок состояния счетчика."""
         return {
             'sensor': name,
             'status': snapshot.status,
@@ -85,12 +92,13 @@ class CounterFormatter(BaseFormatter):
         }
 
     def format_telemetry(self, name: str, metric: float) -> dict:
+        """Сформировать компактную телеметрию для счетчика."""
         return {'sensor': name, 'value': metric}
 
 
 class EnvironmentFormatter(BaseFormatter):
-    """
-    Форматтер для датчиков микроклимата и среды (например, ПВТ-110).
+    """Форматтер для датчиков микроклимата и среды (например, ПВТ-110).
+
     Распаковывает словари метрик (temperature, humidity) на верхний уровень ответа.
     Не передает дублирующий true_value в минутных отчетах.
     """
@@ -102,6 +110,7 @@ class EnvironmentFormatter(BaseFormatter):
         status: SensorStatus,
         measured_at: datetime,
     ) -> dict:
+        """Сформировать мгновенный ответ для датчика среды."""
         response = {'sensor': name, 'measured_at': measured_at, 'status': status}
         if isinstance(metric, dict):
             response.update(metric)
@@ -110,6 +119,7 @@ class EnvironmentFormatter(BaseFormatter):
     def format_snapshot(
         self, name: str, snapshot: SensorMinuteSnapshot, state: SensorRuntimeState
     ) -> dict:
+        """Сформировать минутный снимок состояния датчика среды."""
         response = {
             'sensor': name,
             'status': snapshot.status,
@@ -123,6 +133,7 @@ class EnvironmentFormatter(BaseFormatter):
         return response
 
     def format_telemetry(self, name: str, metric: dict | None) -> dict:
+        """Сформировать компактную телеметрию для датчика среды."""
         payload = {'sensor': name}
         if isinstance(metric, dict):
             payload.update(metric)

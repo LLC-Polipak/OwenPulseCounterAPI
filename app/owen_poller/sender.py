@@ -1,3 +1,5 @@
+"""Фоновая отправка собранных показаний на внешний сервер."""
+
 import asyncio
 import copy
 import logging
@@ -12,21 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 class PcsPerMinSender:
-    """
-    Фоновая задача для периодической отправки собранных данных на внешний сервер (PhyHub).
+    """Фоновая задача для периодической отправки данных на внешний сервер (PhyHub).
+
     Самостоятельно обрабатывает разницу между накопительными и мгновенными сенсорами.
     """
 
     def __init__(self, poller):
-        """
-        :param poller: Ссылка на инстанс SensorsPoller для доступа к данным сенсоров.
-        """
         self.poller = poller
         self.last_readings = {}
 
     async def send_readings(self):
-        """
-        Бесконечный цикл формирования JSON payload'а и отправки его по HTTP.
+        """Запустить бесконечный цикл формирования JSON payload и отправки по HTTP.
+
         Вызывается раз в 30 секунд.
         """
         while True:

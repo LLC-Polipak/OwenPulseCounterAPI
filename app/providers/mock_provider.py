@@ -1,3 +1,5 @@
+"""Виртуальный поставщик данных для тестирования без физического оборудования."""
+
 import logging
 import random
 import struct
@@ -10,17 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class MockDataProvider(BaseDataProvider):
-    """
-    «Умная» заглушка для тестирования без физического оборудования.
+    """«Умная» заглушка для тестирования без физического оборудования.
+
     Автоматически распознает запросы Modbus RTU и ОВЕН, генерирует реалистичные
     ответы и имитирует флуктуации физических величин.
     """
 
     def __init__(self, fail_rate: float = 0.05):
-        """
-        :param fail_rate: Вероятность (0.0 - 1.0) того, что мок сымитирует обрыв
-                          или порчу пакета для проверки отказоустойчивости поллера.
-        """
         self._is_open = False
         self.fail_rate = fail_rate
         self._response_buffer = b''
@@ -31,40 +29,40 @@ class MockDataProvider(BaseDataProvider):
 
     @property
     def name(self) -> str:
-        """Возвращает виртуальное имя порта."""
+        """Вернуть виртуальное имя порта."""
         return 'Smart-Mock-485'
 
     def connect(self) -> bool:
-        """Имитирует успешное открытие системного порта."""
+        """Имитировать успешное открытие системного порта."""
         self._is_open = True
         return True
 
     def disconnect(self) -> None:
-        """Имитирует закрытие системного порта."""
+        """Имитировать закрытие системного порта."""
         self._is_open = False
 
     @property
     def is_connected(self) -> bool:
-        """Показывает текущее состояние виртуального подключения."""
+        """Вернуть текущее состояние виртуального подключения."""
         return self._is_open
 
     def clear_buffers(self) -> None:
-        """Очищает внутренний буфер ответа, имитируя сброс буферов ОС."""
+        """Очистить внутренний буфер ответа, имитируя сброс буферов ОС."""
         self._response_buffer = b''
 
     def write(self, data: bytes) -> None:
-        """
-        Перехватывает запись в порт.
+        """Перехватить запись в порт.
 
         Анализирует паттерн байтов, определяет протокол (Modbus или ОВЕН)
         и формирует соответствующий ответ во внутренний буфер.
 
-        :param data: Пакет байтов (запрос от драйвера).
+        Args:
+            data: Пакет байтов (запрос от драйвера).
         """
         if not self._is_open:
             raise SerialException('Попытка записи в закрытый Mock-порт')
 
-        if random.random() < self.fail_rate:
+        if random.random() < self.fail_rate:  # noqa: S311
             logger.debug(f'[MOCK {self.name}] Генерирую случайный сбой (обрыв ответа).')
             self._response_buffer = b''
             return
@@ -79,13 +77,15 @@ class MockDataProvider(BaseDataProvider):
             self._response_buffer = b''
 
     def read(self, size: int) -> bytes:
-        """
-        Имитирует побайтовое чтение из порта ОС.
+        """Имитировать побайтовое чтение из порта ОС.
 
         Отдает запрошенное количество байт из сформированного ранее буфера ответа.
 
-        :param size: Ожидаемое количество байт для чтения.
-        :return: Байты ответа или пустой `bytes`, если буфер пуст.
+        Args:
+            size: Ожидаемое количество байт для чтения.
+
+        Returns:
+            Байты ответа или пустой `bytes`, если буфер пуст.
         """
         if not self._is_open:
             raise SerialException('Попытка чтения из закрытого Mock-порта')
@@ -95,7 +95,8 @@ class MockDataProvider(BaseDataProvider):
         return chunk
 
     def _handle_modbus_protocol(self, req: bytes) -> bytes:
-        """
+        """Обработать запрос по протоколу Modbus.
+
         Распознает регистры и функции Modbus, генерируя флуктуации
         для температуры и влажности, либо обрабатывает сервисные команды.
         """
@@ -105,16 +106,16 @@ class MockDataProvider(BaseDataProvider):
 
         if func == 0x03:
             if reg_addr == 2250:
-                self._pvt_temp += random.uniform(-0.2, 0.2)
+                self._pvt_temp += random.uniform(-0.2, 0.2)  # noqa: S311
                 return self._pack_modbus_float_response(addr, self._pvt_temp)
 
-            elif reg_addr == 2200:
-                self._pvt_hum += random.uniform(-0.5, 0.5)
+            if reg_addr == 2200:
+                self._pvt_hum += random.uniform(-0.5, 0.5)  # noqa: S311
                 self._pvt_hum = max(0.0, min(100.0, self._pvt_hum))
                 return self._pack_modbus_float_response(addr, self._pvt_hum)
 
-            elif reg_addr == 1300:
-                hw_status_code = 0 if random.random() > 0.02 else 2
+            if reg_addr == 1300:
+                hw_status_code = 0 if random.random() > 0.02 else 2  # noqa: S311
                 if hw_status_code != 0:
                     logger.warning(
                         '[MOCK] Генерирую фейковую аппаратную ошибку ПВТ-110!'
@@ -138,9 +139,9 @@ class MockDataProvider(BaseDataProvider):
         return b''
 
     def _pack_modbus_float_response(self, addr: int, val: float) -> bytes:
-        """
-        Упаковывает значение Float32 в ответный пакет Modbus
-        с порядком байт CDAB (Стандарт ОВЕН).
+        """Упаковать значение Float32 в ответный пакет Modbus.
+
+        Использует порядок байт CDAB (стандарт ОВЕН).
         """
         raw_float = struct.pack('>f', val)
         cdab_float = raw_float[2:4] + raw_float[0:2]
@@ -148,7 +149,7 @@ class MockDataProvider(BaseDataProvider):
         return resp_no_crc + struct.pack('<H', self._calc_modbus_crc(resp_no_crc))
 
     def _calc_modbus_crc(self, data: bytes) -> int:
-        """Вычисляет контрольную сумму CRC16 для Modbus."""
+        """Вычислить контрольную сумму CRC16 для Modbus."""
         crc = 0xFFFF
         for pos in data:
             crc ^= pos
@@ -161,9 +162,10 @@ class MockDataProvider(BaseDataProvider):
         return crc
 
     def _handle_owen_protocol(self, ascii_req: bytes) -> bytes:
-        """
-        Распознает запросы протокола ОВЕН, инкрементирует виртуальный
-        счетчик деталей и формирует валидный ASCII пакет с BCD-данными.
+        """Обработать запрос протокола ОВЕН.
+
+        Инкрементирует виртуальный счетчик деталей и формирует
+        валидный ASCII-пакет с BCD-данными.
         """
         bin_req = self._owen_ascii_to_bin(ascii_req)
         if len(bin_req) < 6:
@@ -172,7 +174,7 @@ class MockDataProvider(BaseDataProvider):
         addr_hash = bytearray(bin_req[:4])
         addr_hash[1] &= 0xEF
 
-        self._ci8_counter += random.randint(20, 50)
+        self._ci8_counter += random.randint(20, 50)  # noqa: S311
         data_block = self._int_to_bcd(self._ci8_counter, length_bytes=4)
 
         resp_bin = addr_hash + data_block
@@ -181,8 +183,7 @@ class MockDataProvider(BaseDataProvider):
         return self._owen_bin_to_ascii(resp_bin)
 
     def _int_to_bcd(self, val: int, length_bytes: int = 4) -> bytes:
-        """
-        Переводит целое число в двоично-десятичный формат BCD (DEC_dot0).
+        """Перевести целое число в двоично-десятичный формат BCD (DEC_dot0).
 
         Пример: 1234 превратится в байты 0x12 0x34.
         """
@@ -190,7 +191,7 @@ class MockDataProvider(BaseDataProvider):
         return bytes(int(s[i : i + 2], 16) for i in range(0, len(s), 2))
 
     def _calc_owen_crc(self, data: bytes) -> int:
-        """Вычисляет специфичную контрольную сумму CRC16 для протокола ОВЕН."""
+        """Вычислить специфичную контрольную сумму CRC16 для протокола ОВЕН."""
         crc = 0x00
         for byte in data:
             for _ in range(8):
@@ -205,9 +206,9 @@ class MockDataProvider(BaseDataProvider):
         return crc
 
     def _owen_ascii_to_bin(self, ascii_data: bytes) -> bytes:
-        """
-        Распаковывает тетрады (ASCII символы G-V) обратно в бинарный вид.
-        Каждые 2 ASCII символа превращаются в 1 байт.
+        """Распаковать тетрады (ASCII-символы G-V) обратно в бинарный вид.
+
+        Каждые 2 ASCII-символа превращаются в 1 байт.
         """
         bin_packet = bytearray()
         for i in range(1, len(ascii_data) - 1, 2):
@@ -217,8 +218,8 @@ class MockDataProvider(BaseDataProvider):
         return bytes(bin_packet)
 
     def _owen_bin_to_ascii(self, bin_data: bytes) -> bytes:
-        """
-        Оборачивает бинарные данные в ASCII-оболочку ОВЕН.
+        """Обернуть бинарные данные в ASCII-оболочку ОВЕН.
+
         Каждый байт разбивается на 2 тетрады и смещается на 0x47 (символ G).
         """
         ascii_packet = bytearray(b'#')

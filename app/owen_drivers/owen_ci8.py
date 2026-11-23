@@ -1,3 +1,5 @@
+"""Драйвер для работы со счетчиком импульсов ОВЕН СИ8 по протоколу ОВЕН."""
+
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -21,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 class DataConverters:
+    """Набор конвертеров данных из форматов протокола ОВЕН."""
+
     __CLK_DATA_LEN = 7
     __CLK_HOURS_BYTES = slice(0, 3)
     __CLK_MINUTES_BYTES = slice(3, 4)
@@ -29,9 +33,7 @@ class DataConverters:
 
     @staticmethod
     def bcd_to_int(data: bytes | bytearray) -> int:
-        """
-        Конвертирует DEC_dot0 (BCD) в int.
-        """
+        """Конвертировать DEC_dot0 (BCD) в int."""
         if len(data) == 0:
             raise BCDValueError(data=data)
         result = 0
@@ -46,9 +48,7 @@ class DataConverters:
 
     @classmethod
     def clk_to_timedelta(cls, data: bytes | bytearray) -> timedelta:
-        """
-        Конвертирует CLK_frm в timedelta.
-        """
+        """Конвертировать CLK_frm в timedelta."""
         if len(data) != cls.__CLK_DATA_LEN:
             raise TimeValueError(data=data)
         hours = cls.bcd_to_int(data[cls.__CLK_HOURS_BYTES])
@@ -90,7 +90,7 @@ class OwenCI8(BaseDriver):
     __OWEN_PACKET_HEADER: bytes = b'#'  # маркер начала пакета
     __OWEN_PACKET_FOOTER: bytes = b'\r'  # маркер окончания пакета
     __OWEN_PARAM_HASH_LEN: int = 2  # количество байт хеша параметров
-    __OWEN_ADDR_LENS: tuple[int] = (8, 11)  # допустимые длины адресов
+    __OWEN_ADDR_LENS: tuple[int, ...] = (8, 11)  # допустимые длины адресов
     # Поля двоичного пакета Owen
     __OWEN_ADDR_BYTES: slice = slice(0, 2)  # 2-й байт содержит доп. данные
     __OWEN_CRC_BYTES: slice = slice(-2, None)
@@ -122,10 +122,6 @@ class OwenCI8(BaseDriver):
     __ZERO_DATA_LEN_ERR_MSG = 'В ответном пакете нет данных.'
 
     def __init__(self, addr: int, **kwargs):
-        """
-        :param addr: адрес счетчика СИ8,
-        :param kwargs: Из дополнительных параметров берется длина адреса (addr_len).
-        """
         super().__init__(addr, **kwargs)
         addr_len = kwargs.get('addr_len', 2)
 
@@ -148,10 +144,13 @@ class OwenCI8(BaseDriver):
 
     @staticmethod
     def calc_owen_crc(data: bytes) -> bytes:
-        """
-        Возвращает ОВЕН CRC16. Полином 0x8F57.
-        :param data: Данные.
-        :return: CRC.
+        """Вычислить и вернуть ОВЕН CRC16 (полином 0x8F57).
+
+        Args:
+            data: Данные для расчета.
+
+        Returns:
+            Два байта CRC.
         """
         crc = 0x00
         for byte in data:
@@ -167,11 +166,15 @@ class OwenCI8(BaseDriver):
         return crc.to_bytes(2, 'big')
 
     def get_command_packet(self, parameter_hash: bytes) -> bytearray:
-        """
-        Подготавливает двоичный пакет запроса парамера.
+        """Подготовить двоичный пакет запроса параметра.
+
         Подготовленный пакет содержит поля адреса, признака запроса и CRC.
-        :param parameter_hash: Hash запрашиваемого параметра.
-        :return: Двоичный пакет.
+
+        Args:
+            parameter_hash: Hash запрашиваемого параметра.
+
+        Returns:
+            Двоичный пакет.
         """
         hash_len = len(parameter_hash)
         if hash_len != self.__OWEN_PARAM_HASH_LEN:
@@ -189,8 +192,8 @@ class OwenCI8(BaseDriver):
         return data
 
     def bin_to_ascii(self, data: bytearray) -> bytearray:
-        """
-        Преобразует двоичный пакет в ASCII.
+        """Преобразовать двоичный пакет в ASCII.
+
         Каждая тетрада пакета заменяется на ASCII символ с кодом 0x47 - 0x56.
         Добавляет символы начала и окончания пакета.
         """
@@ -205,11 +208,10 @@ class OwenCI8(BaseDriver):
         return ascii_packet
 
     def ascii_to_bin(self, data: bytes) -> bytearray:
-        """
-        Преобразует ASCII пакет в двоичный.
+        """Преобразовать ASCII пакет в двоичный.
+
         Вызывает исключения при ошибках.
         """
-
         try:
             if data[0] != ord(self.__OWEN_PACKET_HEADER):
                 raise PacketHeaderError(packet=data)
@@ -241,9 +243,9 @@ class OwenCI8(BaseDriver):
             ) from None
 
     def check_bin_packet(self, data: bytearray, parameter_hash: bytes) -> bytearray:
-        """
-        Проверяет валидность пакета и возвращает извлеченный блок данных.
-        Поднимает исключение если пакет не валиден.
+        """Проверить валидность пакета и вернуть извлеченный блок данных.
+
+        Поднимает исключение, если пакет не валиден.
         """
         try:
             # проверяем CRC
@@ -280,11 +282,14 @@ class OwenCI8(BaseDriver):
             raise PacketLenError(packet=data) from None
 
     def read_parameter(self, provider: BaseDataProvider, **kwargs):
-        """
-        Считывает параметр счетчика импульсов.
-        :param provider: Поставщик данных.
-        :param kwargs: Нужен для хранения параметра хэша.
-        :return: Значение параметра.
+        """Считать параметр счетчика импульсов.
+
+        Args:
+            provider: Поставщик данных.
+            **kwargs: Дополнительные аргументы (содержит хеш параметра).
+
+        Returns:
+            Значение параметра.
         """
         parameter_hash = kwargs.get('parameter', self.DCNT)
 
@@ -306,9 +311,10 @@ class OwenCI8(BaseDriver):
     def calculate_minute_metric(
         self, start_val: int | None, end_val: int | None
     ) -> int | None:
-        """
-        Вычисляет разницу (дельту) импульсов, прошедших за одну минуту.
-        Автоматически учитывает переполнение аппаратного счетчика прибора (переход через MAX_VALUE).
+        """Вычислить разницу (дельту) импульсов, прошедших за одну минуту.
+
+        Автоматически учитывает переполнение аппаратного счетчика прибора
+        (переход через MAX_VALUE).
         """
         if start_val is None or end_val is None:
             return None
@@ -319,9 +325,9 @@ class OwenCI8(BaseDriver):
     def calculate_instant_metric(
         self, curr_val: int, prev_val: int, duration_sec: float
     ) -> float:
-        """
-        Вычисляет мгновенную скорость (штук/импульсов в минуту) на основе времени
-        с момента прошлого запроса.
+        """Вычислить мгновенную скорость (импульсов в минуту).
+
+        Рассчитывается на основе времени с момента прошлого запроса.
         """
         if duration_sec <= 0:
             return 0.0
@@ -331,14 +337,13 @@ class OwenCI8(BaseDriver):
         else:
             diff = self.MAX_VALUE - prev_val + curr_val
 
-        speed = diff / duration_sec * 60
-        return round(speed, 2)
+        return round(diff / duration_sec * 60, 2)
 
     def get_status(self, metric: int | None, state: SensorRuntimeState) -> SensorStatus:
-        """
-        Анализирует состояние конвейера и связи.
+        """Проанализировать состояние конвейера и связи.
 
-        Уводит в OFFLINE при FAILED_READ_ATTEMPTS ошибках подряд или OFFLINE_THRESHOLD секундах отсутствия ответа.
+        Уводит в OFFLINE при FAILED_READ_ATTEMPTS ошибках подряд или
+        OFFLINE_THRESHOLD секундах отсутствия ответа.
         Возвращает STOP, если связь есть, но импульсы не поступают (скорость = 0).
         """
         if state.consecutive_fails >= self.__FAILED_READ_ATTEMPTS:
@@ -364,9 +369,9 @@ class OwenCI8(BaseDriver):
         return SensorStatus.OK
 
     def reboot(self, provider: 'BaseDataProvider') -> bool:
-        """Счетчик СИ8 не поддерживает программную перезагрузку по интерфейсу."""
+        """Вернуть False (счетчик СИ8 не поддерживает программную перезагрузку)."""
         return False
 
     def read_device_status(self, provider: 'BaseDataProvider') -> dict | None:
-        """Счетчик СИ8 не поддерживает детализированный запрос аппаратного статуса."""
+        """Вернуть None (счетчик СИ8 не поддерживает запрос аппаратного статуса)."""
         return None

@@ -1,3 +1,5 @@
+"""Базовый абстрактный класс для драйверов оборудования."""
+
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -7,8 +9,8 @@ from app.providers.base_provider import BaseDataProvider
 
 
 class BaseDriver(ABC):
-    """
-    Абстрактный интерфейс для любого драйвера оборудования.
+    """Абстрактный интерфейс для любого драйвера оборудования.
+
     Задает контракт на чтение данных и расчет метрик.
     """
 
@@ -21,15 +23,10 @@ class BaseDriver(ABC):
     min_success_rate: float = 0.5
 
     def __init__(self, addr: int, **kwargs):
-        """
-        :param addr: Адрес устройства.
-        :param kwargs: Любые дополнительные параметры (например, addr_len).
-        """
         self.addr = addr
 
     def calculate_success_rate(self, attempt_count: int, success_count: int) -> float:
-        """
-        Самостоятельно вычисляет процент успешных запросов.
+        """Вычислить процент успешных запросов.
 
         Метод может быть переопределен, если прибору нужна иная математика расчета.
         """
@@ -39,69 +36,77 @@ class BaseDriver(ABC):
 
     @abstractmethod
     def read_parameter(self, provider: BaseDataProvider, **kwargs) -> Any:
-        """
-        Чтение параметра с физического устройства.
+        """Прочитать параметр с физического устройства.
 
-        :param provider: Поставщик данных.
-        :param kwargs: Любые дополнительные параметры.
-        :return: Прочитанное значение (int, float, dict и т.д.) или None при ошибке
+        Args:
+            provider: Поставщик данных.
+            **kwargs: Любые дополнительные параметры.
+
+        Returns:
+            Прочитанное значение (int, float, dict и т.д.) или None при ошибке.
         """
-        pass
 
     @abstractmethod
     def calculate_minute_metric(self, start_val: Any, end_val: Any) -> Any:
-        """
-        Рассчитывает итоговую метрику за прошедшую завершенную минуту.
+        """Рассчитать итоговую метрику за прошедшую завершенную минуту.
+
         Используется для формирования исторического Snapshot'а.
 
-        :param start_val: Значение датчика в начале минуты.
-        :param end_val: Значение датчика в конце минуты.
-        :return: Итоговое вычисленное значение (например, разница для счетчиков).
+        Args:
+            start_val: Значение датчика в начале минуты.
+            end_val: Значение датчика в конце минуты.
+
+        Returns:
+            Итоговое вычисленное значение (например, разница для счетчиков).
         """
-        pass
 
     @abstractmethod
     def calculate_instant_metric(
         self, curr_val: Any, prev_val: Any, duration_sec: float
     ) -> Any:
-        """
-        Рассчитывает метрику в реальном времени.
+        """Рассчитать метрику в реальном времени.
 
-        :param curr_val: Текущее значение.
-        :param prev_val: Значение с момента прошлого запроса.
-        :param duration_sec: Время в секундах между текущим и прошлым запросом.
-        :return: Мгновенная скорость или текущее значение.
+        Args:
+            curr_val: Текущее значение.
+            prev_val: Значение с момента прошлого запроса.
+            duration_sec: Время в секундах между текущим и прошлым запросом.
+
+        Returns:
+            Мгновенная скорость или текущее значение.
         """
-        pass
 
     @abstractmethod
     def get_status(self, metric: Any, state: SensorRuntimeState) -> SensorStatus:
-        """
-        Анализирует вычисленную метрику и runtime-статистику прибора
-        для определения его логического состояния.
+        """Определить логическое состояние прибора.
 
-        :param metric: Вычисленная метрика (скорость, дельта, словари с градусами).
-        :param state: Текущее состояние (кол-во ошибок, время последнего успешного ответа).
-        :return: Статус прибора (OK, STOP, OFFLINE, UNKNOWN).
+        Анализирует вычисленную метрику и runtime-статистику прибора.
+
+        Args:
+            metric: Вычисленная метрика (скорость, дельта, словари с градусами).
+            state: Текущее состояние (кол-во ошибок, время последнего успешного ответа).
+
+        Returns:
+            Статус прибора (OK, STOP, OFFLINE, UNKNOWN).
         """
-        pass
 
     @abstractmethod
     def reboot(self, provider: BaseDataProvider) -> bool:
-        """
-        Отправляет команду на программную перезагрузку физического устройства.
+        """Отправить команду на программную перезагрузку физического устройства.
 
-        :param provider: Провайдер связи (COM-порт / Mock)
-        :return: True, если команда успешно принята устройством. По умолчанию False.
+        Args:
+            provider: Провайдер связи (COM-порт / Mock).
+
+        Returns:
+            True, если команда успешно принята устройством. По умолчанию False.
         """
-        pass
 
     @abstractmethod
     def read_device_status(self, provider: BaseDataProvider) -> dict[str, Any] | None:
-        """
-        Считывает аппаратный статус или код ошибки с самого устройства.
+        """Считать аппаратный статус или код ошибки с самого устройства.
 
-        :param provider: Провайдер связи (COM-порт / Mock)
-        :return: Словарь с описанием статуса, либо None, если не поддерживается.
+        Args:
+            provider: Провайдер связи (COM-порт / Mock).
+
+        Returns:
+            Словарь с описанием статуса, либо None, если не поддерживается.
         """
-        pass
