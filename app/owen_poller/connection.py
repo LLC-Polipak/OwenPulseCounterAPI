@@ -1,3 +1,5 @@
+"""Управление физическим соединением с оборудованием."""
+
 from app.providers.base_provider import BaseDataProvider
 from app.providers.mock_provider import MockDataProvider
 from app.providers.serial_provider import SerialDataProvider
@@ -15,9 +17,9 @@ class ConnectionManager:
             self.provider = SerialDataProvider(settings or {})
 
     def connect(self) -> bool:
-        """Обеспечивает подключение. Возвращает True, если порт готов к обмену."""
+        """Обеспечить подключение (вернуть True, если порт готов к обмену)."""
         return self.provider.connect()
 
     def disconnect(self) -> None:
-        """Принудительно закрывает порт."""
+        """Принудительно закрыть порт."""
         self.provider.disconnect()

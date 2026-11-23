@@ -1,3 +1,5 @@
+"""Модуль периодического опроса физических устройств."""
+
 import asyncio
 import logging
 from datetime import datetime
@@ -12,19 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 class SensorsPoller:
-    """
-    Главный класс опроса устройств.
+    """Главный класс опроса устройств.
 
     Управляет инициализацией оборудования, сортировкой очереди опроса,
     периодическим сбором данных и сохранением состояния (State).
     """
 
     def __init__(self, settings):
-        """
-        Инициализирует поллер на основе файла конфигурации.
-
-        :param settings: Объект настроек, содержащий параметры порта и список сенсоров.
-        """
         self.settings = settings
         self.is_active = False
 
@@ -57,10 +53,10 @@ class SensorsPoller:
             self.registry.add_sensor(sensor)
 
     async def sensors_update(self):
-        """
-        Выполняет один проход опроса всех зарегистрированных сенсоров.
+        """Выполнить один проход опроса всех зарегистрированных сенсоров.
 
-        Обновляет runtime-состояние (минутную статистику, количество удачных/неудачных чтений).
+        Обновляет runtime-состояние (минутную статистику, количество
+        удачных/неудачных чтений).
         """
         port_is_ready = self.connection.connect()
         now = datetime.now()
@@ -94,10 +90,9 @@ class SensorsPoller:
                 await asyncio.sleep(getattr(self.settings, 'INTER_SENSOR_DELAY', 0.15))
 
     async def poll(self):
-        """
-        Основной бесконечный асинхронный цикл поллера.
+        """Запустить основной бесконечный асинхронный цикл поллера.
 
-        Запускает опрос и ждет заданное время (POLL_DELAY).
+        Выполняет опрос и ждет заданное время (POLL_DELAY).
         """
         self.is_active = True
         try:
@@ -110,5 +105,5 @@ class SensorsPoller:
             raise
 
     def stop(self):
-        """Останавливает цикл поллера."""
+        """Остановить цикл поллера."""
         self.is_active = False

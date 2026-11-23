@@ -1,6 +1,8 @@
+"""Модели хранения runtime-состояния и минутных снимков сенсора."""
+
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from app.owen_poller.enums import SensorStatus
 
@@ -10,8 +12,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class SensorRuntimeState:
-    """
-    Богатая модель (Rich Domain Model) состояния сенсора.
+    """Богатая модель (Rich Domain Model) состояния сенсора.
+
     Инкапсулирует данные о попытках чтения и логику вычисления собственных статусов.
     """
 
@@ -30,15 +32,16 @@ class SensorRuntimeState:
 
     last_success_ts: datetime | None = None
 
-    last_minute_snapshot: Optional['SensorMinuteSnapshot'] = None
+    last_minute_snapshot: 'SensorMinuteSnapshot | None' = None
 
     def add_success(self, value: Any, timestamp: datetime) -> None:
-        """
-        Регистрирует успешное получение данных от прибора.
+        """Зарегистрировать успешное получение данных от прибора.
+
         Сбрасывает счетчик ошибок подряд и обновляет минутные рамки (start/end_value).
 
-        :param value: Полученное значение (число, словарь и т.д.).
-        :param timestamp: Время получения значения.
+        Args:
+            value: Полученное значение (число, словарь и т.д.).
+            timestamp: Время получения значения.
         """
         self.attempt_count += 1
         self.success_count += 1
@@ -53,8 +56,7 @@ class SensorRuntimeState:
         self.minute_end_value = value
 
     def add_fail(self) -> None:
-        """
-        Регистрирует неудачную попытку опроса (ошибка CRC, таймаут, пустой ответ).
+        """Зарегистрировать неудачную попытку опроса (CRC, таймаут, пустой ответ).
 
         Увеличивает счетчик общего количества попыток и количество ошибок подряд.
         """
@@ -64,14 +66,14 @@ class SensorRuntimeState:
     def check_minute_boundary(
         self, current_time: datetime, device: 'BaseDriver'
     ) -> None:
-        """
-        Проверяет, не наступила ли новая минута.
+        """Проверить, не наступила ли новая минута.
 
         Если минута сменилась, вызывает метод финализации прошлой минуты
         и сбрасывает все счетчики попыток.
 
-        :param current_time: Текущее время (обычно datetime.now()).
-        :param device: Ссылка на драйвер прибора для делегирования расчетов.
+        Args:
+            current_time: Текущее время (обычно datetime.now()).
+            device: Ссылка на драйвер прибора для делегирования расчетов.
         """
         minute = current_time.replace(second=0, microsecond=0)
         if self.current_minute != minute:
@@ -85,13 +87,13 @@ class SensorRuntimeState:
             self.attempt_count = 0
 
     def _finalize_minute(self, device: 'BaseDriver') -> None:
-        """
-        Закрывает прошедшую минуту.
+        """Закрыть прошедшую минуту.
 
         Запрашивает у драйвера расчет разницы показаний и статуса,
         а затем сохраняет результат в last_minute_snapshot.
 
-        :param device: Ссылка на драйвер прибора.
+        Args:
+            device: Ссылка на драйвер прибора.
         """
         diff = device.calculate_minute_metric(
             self.minute_start_value, self.minute_end_value
@@ -113,8 +115,8 @@ class SensorRuntimeState:
 
 @dataclass
 class SensorMinuteSnapshot:
-    """
-    Фиксированный "снимок" состояния сенсора по окончании минуты.
+    """Фиксированный «снимок» состояния сенсора по окончании минуты.
+
     Используется для отправки исторической отчетности.
     """
 
