@@ -1,3 +1,5 @@
+"""Точка входа и инициализация FastAPI-приложения."""
+
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -23,22 +25,26 @@ if config.poller_active:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Управлять жизненным циклом приложения и фоновыми задачами опроса."""
     app.state.sensor_poller = poller
 
     poller_task = asyncio.create_task(poller.poll())
+    sender_task = None
     if config.poller_active:
         logger.info('Starting active poller...')
-        asyncio.create_task(readings_sender.send_readings())
+        sender_task = asyncio.create_task(readings_sender.send_readings())
 
     yield
 
     poller.stop()
     poller_task.cancel()
+    if sender_task is not None:
+        sender_task.cancel()
     try:
         await asyncio.wait_for(poller_task, timeout=2)
     except asyncio.CancelledError:
         logger.info('Poller stopped cleanly')
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.critical('Poller did not stop in time')
 
 
