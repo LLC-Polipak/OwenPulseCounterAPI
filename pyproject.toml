@@ -16,6 +16,7 @@ extend-exclude = [
 [tool.ruff.lint]
 ignore = [
     "E501",
+    "D104", # Magic methods are self-describing.
     "D105", # Magic methods are self-describing.
     "D106", # Nested classes are framework configuration such as Django Meta.
     "D107", # Constructor arguments are described by the class and signature.
@@ -40,7 +41,6 @@ select = [
     "D", # pydocstyle
     "LOG", # flake8-logging
     "PIE", # flake8-pie
-    "PT", # flake8-pytest-style
     "RET", # flake8-return
     "RUF",
     "S", # flake8-bandit
@@ -61,6 +61,7 @@ line-ending = "lf"
 [tool.ruff.lint.per-file-ignores]
 "backend/Tech/settings/*.py" = ["F403", "F405"]
 "app/api/handlers/**.py" = ["B008"]
+"**/tests*.py" = ["S101"]
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
