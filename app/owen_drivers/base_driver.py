@@ -23,6 +23,7 @@ class BaseDriver(ABC):
     min_success_rate: float = 0.5
 
     def __init__(self, addr: int, **kwargs):
+        self.raw_addr: int = addr
         self.addr = addr
 
     def calculate_success_rate(self, attempt_count: int, success_count: int) -> float:

@@ -3,12 +3,18 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from serial import SerialException
 
 from app.owen_poller.connection import ConnectionManager
 from app.owen_poller.device_registry import DeviceRegistry
+from app.owen_poller.exceptions import (
+    DeviceAddressAlreadyExists,
+    DeviceNameAlreadyExists,
+)
 from app.owen_poller.sensor import Sensor
+from app.owen_poller.storage import SensorConfigStorage
 
 logger = logging.getLogger(__name__)
 
@@ -28,29 +34,65 @@ class SensorsPoller:
         self.connection = ConnectionManager(settings.serial_settings, use_mock)
         self.registry = DeviceRegistry()
 
-        for s_settings in settings.sensors_settings:
-            device_class = s_settings['driver']
-            kwargs = {
-                k: v
-                for k, v in s_settings.items()
-                if k not in ('name', 'driver', 'parameter')
-            }
+        storage_path = getattr(
+            settings, 'SENSORS_STORAGE_FILE', 'sensors_config.json'
+        )
+        self.storage = SensorConfigStorage(storage_path)
 
-            formatter = s_settings.get('formatter')
-            if not formatter:
-                raise ValueError(
-                    f"Отсутствует настройка 'formatter' для сенсора {s_settings['name']}"
-                )
+        initial_configs = self.storage.load_or_init(settings.sensors_settings)
+        for s_settings in initial_configs:
+            self._create_and_register_sensor(s_settings)
 
-            sensor = Sensor(
-                name=s_settings['name'],
-                device=device_class(**kwargs),
-                formatter=formatter,
-                provider=self.connection.provider,
-                watchdog=s_settings.get('watchdog'),
-                parameter=s_settings.get('parameter'),
+    def _create_and_register_sensor(self, s_settings: dict[str, Any]) -> Sensor:
+        """Создать экземпляр Sensor из словаря настроек и добавить в реестр."""
+        device_class = s_settings['driver']
+        kwargs = {
+            k: v
+            for k, v in s_settings.items()
+            if k not in ('name', 'driver', 'parameter', 'formatter', 'watchdog')
+        }
+
+        formatter = s_settings.get('formatter')
+        if not formatter:
+            raise ValueError(
+                f"Отсутствует настройка 'formatter' для сенсора {s_settings['name']}"
             )
-            self.registry.add_sensor(sensor)
+
+        sensor = Sensor(
+            name=s_settings['name'],
+            device=device_class(**kwargs),
+            formatter=formatter,
+            provider=self.connection.provider,
+            watchdog=s_settings.get('watchdog'),
+            parameter=s_settings.get('parameter'),
+        )
+        self.registry.add_sensor(sensor)
+        return sensor
+
+    def register_new_sensor(self, raw_config: dict[str, Any]) -> Sensor:
+        """Провалидировать, зарегистрировать новый сенсор и сохранить его локально.
+
+        Args:
+            raw_config: Словарь с параметрами нового устройства.
+
+        Returns:
+            Созданный экземпляр Sensor.
+        """
+        name = raw_config['name']
+        addr = raw_config['addr']
+
+        if name in self.registry.sensors:
+            raise DeviceNameAlreadyExists(name)
+
+        if self.registry.has_address(addr):
+            raise DeviceAddressAlreadyExists(addr)
+
+        deserialized_cfg = self.storage._deserialize_item(raw_config)
+        sensor = self._create_and_register_sensor(deserialized_cfg)
+        self.storage.add_sensor_config(raw_config)
+
+        logger.info(f'Добавлен новый сенсор {name} (адрес {addr}) в список опроса.')
+        return sensor
 
     async def sensors_update(self):
         """Выполнить один проход опроса всех зарегистрированных сенсоров.

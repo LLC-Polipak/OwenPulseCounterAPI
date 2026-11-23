@@ -110,3 +110,10 @@ class DeviceRegistry:
             result.append(response)
 
         return result
+
+    def has_address(self, addr: int) -> bool:
+        """Проверить, зарегистрировано ли уже устройство с указанным адресом."""
+        return any(
+            getattr(sensor.device, 'raw_addr', sensor.device.addr) == addr
+            for sensor in self.sensors.values()
+        )
