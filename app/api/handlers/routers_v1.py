@@ -110,30 +110,8 @@ async def get_sensor_readings(
 
 @router.get('/sensors/config/', tags=['Sensors'])
 async def get_sensors_config(poller: 'SensorsPoller' = Depends(get_sensor_poller)):
-    """Получить текущую конфигурацию всех активных сенсоров."""
-    config_list = []
-
-    for sensor in poller.registry.sensors.values():
-        driver = sensor.device
-        param = sensor.parameter
-        if isinstance(param, bytes):
-            param_repr = f'0x{param.hex()}'
-        else:
-            param_repr = str(param) if param is not None else None
-
-        config_list.append(
-            {
-                'name': sensor.name,
-                'driver': driver.__class__.__name__,
-                'address': getattr(driver, 'raw_addr', driver.addr),
-                'addr_len': getattr(driver, 'addr_len', None),
-                'parameter': param_repr,
-                'poll_priority': getattr(driver, 'poll_priority', None),
-                'poll_interval_sec': getattr(driver, 'poll_interval', None),
-            }
-        )
-
-    return config_list
+    """Получить текущую конфигурацию сенсоров из локального JSON-файла."""
+    return poller.storage.get_all_serialized()
 
 
 @router.get('/test_sensor/{driver_name}/{addr}', tags=['Debug'])
