@@ -7,9 +7,11 @@ from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 
 from app.dependencies import get_device_registry, get_sensor_poller
+from app.owen_drivers.exceptions import ImproperlyConfiguredError
 from app.owen_drivers.modbus_pvt110 import ModbusPVT110
 from app.owen_drivers.owen_ci8 import OwenCI8
 from app.owen_poller.exceptions import DeviceNotFound
+from app.owen_poller.formatters import CounterFormatter, EnvironmentFormatter
 from app.owen_poller.sensor import Sensor
 
 if TYPE_CHECKING:
@@ -77,10 +79,14 @@ async def get_sensors_config(poller: 'SensorsPoller' = Depends(get_sensor_poller
 
 @router.get('/test_sensor/{driver_name}/{addr}', tags=['Debug'])
 async def test_sensor(
-    driver_name: str, addr: int, poller: 'SensorsPoller' = Depends(get_sensor_poller)
+    driver_name: str,
+    addr: int,
+    addr_len: int = 8,
+    poller: 'SensorsPoller' = Depends(get_sensor_poller),
 ):
     """Проверить работоспособность сенсора, отсутствующего в конфигурации."""
     drivers_map = {'ci8': OwenCI8, 'pvt110': ModbusPVT110}
+    formatters_map = {'ci8': CounterFormatter, 'pvt110': EnvironmentFormatter}
 
     driver_name = driver_name.lower()
     if driver_name not in drivers_map:
@@ -90,10 +96,19 @@ async def test_sensor(
         )
 
     device_class = drivers_map[driver_name]
+    formatter_class = formatters_map[driver_name]
+
+    try:
+        device = device_class(addr=addr, addr_len=addr_len)
+    except ImproperlyConfiguredError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from None
 
     temp_sensor = Sensor(
         name=f'debug_{driver_name}_{addr}',
-        device=device_class(addr=addr),
+        device=device,
+        formatter=formatter_class(),
         provider=poller.connection.provider,
         parameter=OwenCI8.DCNT if driver_name == 'ci8' else None,
     )
