@@ -123,7 +123,7 @@ class OwenCI8(BaseDriver):
 
     def __init__(self, addr: int, **kwargs):
         super().__init__(addr, **kwargs)
-        addr_len = kwargs.get('addr_len', 2)
+        addr_len = kwargs.get('addr_len', 8)
 
         # проверяем валидность addr_len
         if addr_len not in self.__OWEN_ADDR_LENS:
